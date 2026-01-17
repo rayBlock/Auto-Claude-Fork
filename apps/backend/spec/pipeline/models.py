@@ -253,6 +253,7 @@ def prompt_for_existing_spec_action(
         print()
 
     print("  [N] Create NEW spec (ignore existing)")
+    print("  [Q] Quit")
     print()
 
     while True:
@@ -260,7 +261,7 @@ def prompt_for_existing_spec_action(
             choice = (
                 input(
                     "  Choose an option "
-                    "(1-5 to select, R to reuse #1, O to overwrite #1, N for new): "
+                    "(1-5 to select, R to reuse #1, O to overwrite #1, N for new, Q to quit): "
                 )
                 .strip()
                 .upper()
@@ -270,6 +271,9 @@ def prompt_for_existing_spec_action(
 
         if choice == "N" or choice == "":
             return ("new", None)
+
+        if choice == "Q":
+            return ("quit", None)
 
         if choice == "R":
             return ("reuse", matches[0]["path"])

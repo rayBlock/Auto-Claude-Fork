@@ -695,8 +695,8 @@ class TestFindExistingSpecForTask:
         )
 
         # Should be sorted by similarity
-        if len(matches) >= 2:
-            assert matches[0]["similarity"] >= matches[1]["similarity"]
+        assert len(matches) >= 2, "Expected at least 2 matches for similarity sorting test"
+        assert matches[0]["similarity"] >= matches[1]["similarity"]
 
 
 class TestCleanupIncompletePendingFolders:
