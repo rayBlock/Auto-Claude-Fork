@@ -58,6 +58,136 @@ function safeReadFileSync(filePath: string): string | null {
 }
 
 /**
+ * Clean up git worktree and associated branch for a task.
+ * @returns Promise<boolean> indicating if the worktree was successfully removed
+ */
+async function cleanupWorktree(projectPath: string, specId: string): Promise<boolean> {
+  const worktreePath = findTaskWorktree(projectPath, specId);
+  if (!worktreePath) return false;
+
+  try {
+    // Get the branch name before removing worktree
+    let branch = `auto-claude/${specId}`;
+    try {
+      branch = execFileSync(getToolPath('git'), ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: worktreePath,
+        encoding: 'utf-8',
+        timeout: 30000,
+        env: getIsolatedGitEnv()
+      }).trim();
+    } catch (error) {
+      console.warn(`[cleanupWorktree] Could not get branch name for ${specId}, using fallback`, error);
+    }
+
+    // Remove the worktree forcefully
+    execFileSync(getToolPath('git'), ['worktree', 'remove', '--force', worktreePath], {
+      cwd: projectPath,
+      encoding: 'utf-8',
+      timeout: 30000,
+      env: getIsolatedGitEnv()
+    });
+
+    // Worktree is successfully removed at this point
+    const removedWorktree = true;
+
+    // Delete the associated branch (best-effort)
+    try {
+      execFileSync(getToolPath('git'), ['branch', '-D', branch], {
+        cwd: projectPath,
+        encoding: 'utf-8',
+        timeout: 30000,
+        env: getIsolatedGitEnv()
+      });
+    } catch (error) {
+      console.warn(`[cleanupWorktree] Could not delete branch '${branch}'`, error);
+    }
+
+    // Prune dangling worktrees (best-effort)
+    try {
+      execFileSync(getToolPath('git'), ['worktree', 'prune'], {
+        cwd: projectPath,
+        encoding: 'utf-8',
+        timeout: 30000,
+        env: getIsolatedGitEnv()
+      });
+    } catch (error) {
+      console.warn('[cleanupWorktree] Worktree prune failed', error);
+    }
+
+    return removedWorktree;
+  } catch (error) {
+    console.error(`[cleanupWorktree] Failed to cleanup ${specId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Recreate a task from existing metadata.
+ */
+async function recreateTask(
+  project: any,
+  oldSpecId: string,
+  title: string,
+  description: string,
+  metadata: any
+): Promise<import('../../../shared/types').Task> {
+  const { mkdir, writeFile } = await import('fs/promises');
+  const specsDir = path.join(project.path, getSpecsDir(project.autoBuildPath));
+
+  const { newSpecId, newSpecDir } = await withSpecNumberLock(
+    project.path,
+    async (lock) => {
+      const specNum = lock.getNextSpecNumber(project.autoBuildPath);
+      const id = generateSpecId(specNum, title);
+      const dir = path.join(specsDir, id);
+      await mkdir(dir, { recursive: true });
+      return { newSpecId: id, newSpecDir: dir };
+    }
+  );
+
+  const now = new Date().toISOString();
+  await writeFile(
+    path.join(newSpecDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN),
+    JSON.stringify({
+      feature: title,
+      description: description,
+      created_at: now,
+      updated_at: now,
+      status: 'pending',
+      phases: []
+    }, null, 2)
+  );
+
+  const newMeta = {
+    ...metadata,
+    sourceType: metadata?.sourceType || 'manual',
+    retriedFrom: oldSpecId
+  };
+  await writeFile(path.join(newSpecDir, 'task_metadata.json'), JSON.stringify(newMeta, null, 2));
+  await writeFile(
+    path.join(newSpecDir, AUTO_BUILD_PATHS.REQUIREMENTS),
+    JSON.stringify({
+      task_description: description,
+      workflow_type: newMeta.category || 'feature'
+    }, null, 2)
+  );
+
+  return {
+    id: newSpecId,
+    specId: newSpecId,
+    projectId: project.id,
+    title,
+    description,
+    status: 'backlog',
+    subtasks: [],
+    logs: [],
+    metadata: newMeta,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+}
+
+/**
  * Helper function to check subtask completion status
  */
 function checkSubtasksCompletion(plan: Record<string, unknown> | null): {
@@ -926,9 +1056,9 @@ export function registerTaskExecutionHandlers(
           plan.status = newStatus;
           plan.planStatus = newStatus === 'done' ? 'completed'
             : newStatus === 'in_progress' ? 'in_progress'
-            : newStatus === 'ai_review' ? 'review'
-            : newStatus === 'human_review' ? 'review'
-            : 'pending';
+              : newStatus === 'ai_review' ? 'review'
+                : newStatus === 'human_review' ? 'review'
+                  : 'pending';
           plan.updated_at = new Date().toISOString();
 
           // Add recovery note
@@ -1194,74 +1324,22 @@ export function registerTaskExecutionHandlers(
       if (agentManager.isRunning(taskId)) {
         agentManager.killTask(taskId);
         fileWatcher.unwatch(taskId);
+        // Add a small delay to allow process to release file handles
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
       // Save task info for potential recreation
-      const { title: taskTitle, description: taskDescription, metadata: taskMetadata, projectId } = task;
-      let cleanedUpWorktree = false;
+      const { title: taskTitle, description: taskDescription, metadata: taskMetadata } = task;
 
-      // Clean up git worktree if it exists (best-effort - cleanup failure shouldn't block task deletion)
-      // The cleanedUpWorktree flag in the response indicates whether cleanup succeeded
-      const worktreePath = findTaskWorktree(project.path, task.specId);
-      if (worktreePath) {
-        try {
-          // Get the branch name before removing worktree
-          let branch = `auto-claude/${task.specId}`;
-          try {
-            branch = execFileSync(getToolPath('git'), ['rev-parse', '--abbrev-ref', 'HEAD'], {
-              cwd: worktreePath,
-              encoding: 'utf-8',
-              timeout: 30000
-            }).trim();
-          } catch (error) {
-            // Use default branch name if rev-parse fails
-            console.warn(`[TASK_DELETE_AND_RETRY] Could not get branch name from worktree, using fallback: ${branch}`, error);
-          }
+      // Clean up git worktree if it exists (best-effort)
+      const cleanedUpWorktree = await cleanupWorktree(project.path, task.specId);
 
-          // Remove the worktree forcefully
-          execFileSync(getToolPath('git'), ['worktree', 'remove', '--force', worktreePath], {
-            cwd: project.path,
-            encoding: 'utf-8',
-            timeout: 30000
-          });
-
-          // Worktree is successfully removed at this point
-          cleanedUpWorktree = true;
-
-          // Delete the associated branch (best-effort)
-          try {
-            execFileSync(getToolPath('git'), ['branch', '-D', branch], {
-              cwd: project.path,
-              encoding: 'utf-8',
-              timeout: 30000
-            });
-          } catch (error) {
-            // Branch may not exist or be the current branch
-            console.warn(`[TASK_DELETE_AND_RETRY] Could not delete branch '${branch}'. It may not exist or be the current branch.`, error);
-          }
-
-          // Prune dangling worktrees (best-effort)
-          try {
-            execFileSync(getToolPath('git'), ['worktree', 'prune'], {
-              cwd: project.path,
-              encoding: 'utf-8',
-              timeout: 30000
-            });
-          } catch (error) {
-            console.warn('[TASK_DELETE_AND_RETRY] Worktree prune failed:', error);
-          }
-        } catch (error) {
-          console.error('[TASK_DELETE_AND_RETRY] Worktree cleanup error:', error);
-        }
-      }
-
-      // Delete the spec directory (rm with force:true handles non-existent paths)
+      // Delete the spec directory
       const specDir = task.specsPath || path.join(project.path, getSpecsDir(project.autoBuildPath), task.specId);
       try {
         await rm(specDir, { recursive: true, force: true });
       } catch (error) {
-        // Invalidate cache even on failure - worktree may have been cleaned up
-        // and we don't want stale data in the UI
+        console.error('[TASK_DELETE_AND_RETRY] Failed to delete spec directory:', error);
         projectStore.invalidateTasksCache(project.id);
         return {
           success: false,
@@ -1271,9 +1349,8 @@ export function registerTaskExecutionHandlers(
 
       // Optionally recreate the task for retry
       if (options?.recreate) {
-        // Check for required data to recreate - use explicit null/undefined checks
-        // to allow empty strings if they were intentionally provided
-        if (taskTitle == null || taskDescription == null) {
+        if (!taskTitle || !taskDescription) {
+          console.warn('[TASK_DELETE_AND_RETRY] Cannot recreate: missing title or description');
           projectStore.invalidateTasksCache(project.id);
           return {
             success: true,
@@ -1286,71 +1363,11 @@ export function registerTaskExecutionHandlers(
         }
 
         try {
-          const { mkdir, writeFile } = await import('fs/promises');
-          const specsDir = path.join(project.path, getSpecsDir(project.autoBuildPath));
-
-          // Use spec number lock to prevent race conditions when calculating next spec number
-          // The mkdir is inside the lock to ensure the directory is created atomically
-          // before another concurrent operation can get the same spec number
-          const { newSpecId, newSpecDir } = await withSpecNumberLock(
-            project.path,
-            async (lock) => {
-              const specNum = lock.getNextSpecNumber(project.autoBuildPath);
-              const newSpecId = generateSpecId(specNum, taskTitle);
-              const newSpecDir = path.join(specsDir, newSpecId);
-              // Create directory inside lock to prevent race condition
-              await mkdir(newSpecDir, { recursive: true });
-              return { newSpecId, newSpecDir };
-            }
-          );
-
-          // Write basic files
-          const now = new Date().toISOString();
-          await writeFile(
-            path.join(newSpecDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN),
-            JSON.stringify({
-              feature: taskTitle,
-              description: taskDescription,
-              created_at: now,
-              updated_at: now,
-              status: 'pending',
-              phases: []
-            }, null, 2)
-          );
-
-          const newMeta = {
-            ...taskMetadata,
-            sourceType: taskMetadata?.sourceType || 'manual',
-            retriedFrom: task.specId
-          };
-          await writeFile(path.join(newSpecDir, 'task_metadata.json'), JSON.stringify(newMeta, null, 2));
-          await writeFile(
-            path.join(newSpecDir, AUTO_BUILD_PATHS.REQUIREMENTS),
-            JSON.stringify({
-              task_description: taskDescription,
-              workflow_type: newMeta.category || 'feature'
-            }, null, 2)
-          );
-
-          const newTask: import('../../../shared/types').Task = {
-            id: newSpecId,
-            specId: newSpecId,
-            projectId,
-            title: taskTitle,
-            description: taskDescription,
-            status: 'backlog',
-            subtasks: [],
-            logs: [],
-            metadata: newMeta,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-
+          const newTask = await recreateTask(project, task.specId, taskTitle, taskDescription, taskMetadata);
           projectStore.invalidateTasksCache(project.id);
           return { success: true, data: { deleted: true, recreatedTask: newTask, cleanedUpWorktree } };
         } catch (error) {
           console.error('[TASK_DELETE_AND_RETRY] Task recreation failed:', error);
-          // If recreation fails, still report successful deletion
           projectStore.invalidateTasksCache(project.id);
           return { success: true, data: { deleted: true, cleanedUpWorktree } };
         }
