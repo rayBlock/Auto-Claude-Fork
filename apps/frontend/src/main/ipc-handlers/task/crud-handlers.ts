@@ -2,7 +2,7 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type { IPCResult, Task, TaskMetadata } from '../../../shared/types';
 import path from 'path';
-import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync, unlinkSync } from 'fs';
 import { projectStore } from '../../project-store';
 import { titleGenerator } from '../../title-generator';
 import { AgentManager } from '../../agent';
@@ -341,6 +341,29 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
               // Reset plan status to trigger re-planning
               plan.planStatus = 'pending';
               plan.status = 'pending';
+
+              // FIX ( ACS-Polish ): Clear recovery notes and QA reports when resetting
+              if (plan.recoveryNote) {
+                delete plan.recoveryNote;
+              }
+
+              // Delete stale QA reports from spec directory
+              const qaFiles = [
+                AUTO_BUILD_PATHS.QA_REPORT,
+                'QA_FIX_REQUEST.md'
+              ];
+
+              for (const file of qaFiles) {
+                const filePath = path.join(specDir, file);
+                if (existsSync(filePath)) {
+                  try {
+                    unlinkSync(filePath);
+                    console.warn(`[TASK_UPDATE] Deleted stale QA file: ${file}`);
+                  } catch (err) {
+                    console.error(`[TASK_UPDATE] Failed to delete QA file ${file}:`, err);
+                  }
+                }
+              }
             } else if (descriptionChanged && !canReplan) {
               const reason = isAgentRunning ? 'agent is still running' : `task status '${task.status}'`;
               console.warn(`[TASK_UPDATE] Description changed but ${reason} prevents re-planning`);
