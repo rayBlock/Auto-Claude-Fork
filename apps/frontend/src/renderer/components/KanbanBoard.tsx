@@ -492,7 +492,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Get projectId from first task
   const projectId = tasks[0]?.projectId;
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
-  const maxParallelTasks = project?.settings.maxParallelTasks ?? 3;
+  const maxParallelTasks = project?.settings?.maxParallelTasks ?? 3;
 
   // Queue settings modal state
   const [showQueueSettings, setShowQueueSettings] = useState(false);
@@ -729,23 +729,41 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     }
   };
 
-  /**
-   * Move all backlog tasks to queue
-   */
   const handleQueueAll = async () => {
     const backlogTasks = tasksByStatus.backlog;
     if (backlogTasks.length === 0) return;
 
     let movedCount = 0;
+    let failedCount = 0;
+    const failedTaskTitles: string[] = [];
+
     for (const task of backlogTasks) {
-      await persistTaskStatus(task.id, 'queue');
-      movedCount++;
+      const result = await persistTaskStatus(task.id, 'queue');
+      if (result.success) {
+        movedCount++;
+      } else {
+        failedCount++;
+        failedTaskTitles.push(task.title || t('tasks:untitled'));
+      }
     }
 
-    toast({
-      title: t('queue.queueAllSuccess', { count: movedCount }),
-      variant: 'default'
-    });
+    if (movedCount > 0) {
+      toast({
+        title: t('queue.queueAllSuccess', { count: movedCount }),
+        variant: 'default'
+      });
+    }
+
+    if (failedCount > 0) {
+      toast({
+        title: t('queue.queueAllFailure', { count: failedCount }),
+        description: failedTaskTitles.slice(0, 3).join(', ') + (failedTaskTitles.length > 3 ? '...' : ''),
+        variant: 'destructive'
+      });
+    }
+
+    // Process queue in case space opened up
+    await processQueue();
   };
 
   /**
@@ -765,7 +783,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
    * Automatically move tasks from Queue to In Progress to fill available capacity
    * Promotes multiple tasks if needed (e.g., after bulk queue)
    */
-  const processQueue = async () => {
+  const processQueue = useCallback(async () => {
+    const attemptedTaskIds = new Set<string>();
+
     // Loop until capacity is full or queue is empty
     while (true) {
       // Get CURRENT state from store to ensure accuracy
@@ -774,7 +794,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         t.status === 'in_progress' && !t.metadata?.archivedAt
       ).length;
       const queuedTasks = currentTasks.filter((t) =>
-        t.status === 'queue' && !t.metadata?.archivedAt
+        t.status === 'queue' && !t.metadata?.archivedAt && !attemptedTaskIds.has(t.id)
       );
 
       // Stop if no capacity or no queued tasks
@@ -789,14 +809,15 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         return dateA - dateB; // Ascending order (oldest first)
       })[0];
 
-      console.log(`[Queue] Auto-promoting task ${nextTask.id} from Queue to In Progress (${inProgressCount + 1}/${maxParallelTasks})`);
+      attemptedTaskIds.add(nextTask.id);
+
       const result = await persistTaskStatus(nextTask.id, 'in_progress');
       if (!result.success) {
         console.error(`[Queue] Failed to auto-promote task ${nextTask.id}:`, result.error);
-        break; // Stop processing queue if promotion fails to avoid infinite loop
+        // Continue to try next task in queue
       }
     }
-  };
+  }, [maxParallelTasks]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -842,13 +863,12 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
       // If limit reached, move to queue instead (unless already coming from queue)
       if (inProgressCount >= maxParallelTasks && oldStatus !== 'queue') {
-        console.log(`[Queue] In Progress full (${inProgressCount}/${maxParallelTasks}), moving task to Queue`);
         newStatus = 'queue';
       }
     }
 
-    // Persist status change to file and update local state
-    await persistTaskStatus(activeTaskId, newStatus);
+    // Persist status change - use handleStatusChange to properly handle worktree cleanup
+    await handleStatusChange(activeTaskId, newStatus, task);
 
     // ============================================
     // QUEUE SYSTEM: Auto-process queue when slot opens

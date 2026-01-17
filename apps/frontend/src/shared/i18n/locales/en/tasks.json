@@ -111,7 +111,8 @@
     "autoPromoted": "Task auto-promoted from queue to In Progress.",
     "capacityAvailable": "{{count}} slot(s) available in In Progress.",
     "queueAll": "Add All to Queue",
-    "queueAllSuccess": "Moved {{count}} tasks to queue."
+    "queueAllSuccess": "Moved {{count}} tasks to queue.",
+    "queueAllFailure": "Failed to queue {{count}} tasks"
   },
   "execution": {
     "phases": {

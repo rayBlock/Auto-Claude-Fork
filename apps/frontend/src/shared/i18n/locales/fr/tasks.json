@@ -112,6 +112,7 @@
     "capacityAvailable": "{{count}} emplacement(s) disponible(s) dans En cours.",
     "queueAll": "Tout ajouter à la file d'attente",
     "queueAllSuccess": "{{count}} tâches déplacées vers la file d'attente.",
+    "queueAllFailure": "Échec de l'ajout de {{count}} tâches à la file d'attente",
     "queueAllAriaLabel": "Déplacer toutes les tâches vers la file d'attente"
   },
   "execution": {
