@@ -20,7 +20,15 @@ LANGUAGE_NAMES: dict[str, str] = {
 }
 
 
-def get_language_instruction(language: str, content_types: str = "") -> str:
+from typing import Optional
+
+
+def get_supported_codes() -> list[str]:
+    """Get the list of supported language codes."""
+    return list(LANGUAGE_NAMES.keys())
+
+
+def get_language_instruction(language: str, content_types: Optional[str] = None) -> str:
     """Get the language instruction to inject into AI prompts.
 
     Args:
@@ -38,7 +46,7 @@ def get_language_instruction(language: str, content_types: str = "") -> str:
     lang_name = LANGUAGE_NAMES.get(language, language)
 
     # Default content types if not specified
-    if not content_types:
+    if content_types is None:
         content_types = "titles, descriptions, rationales"
 
     return f"""

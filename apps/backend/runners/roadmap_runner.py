@@ -33,6 +33,7 @@ from debug import debug, debug_error, debug_warning
 
 # Import from refactored roadmap package
 from roadmap import RoadmapOrchestrator
+from core.language import get_supported_codes
 
 
 def main():
@@ -88,6 +89,7 @@ def main():
         "--language",
         type=str,
         default="en",
+        choices=get_supported_codes(),
         help="Output language for generated content (en, zh-CN, fr, etc.)",
     )
 

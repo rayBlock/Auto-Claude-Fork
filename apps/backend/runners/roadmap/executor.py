@@ -8,8 +8,6 @@ from pathlib import Path
 
 from debug import debug, debug_detailed, debug_error, debug_success
 
-# Add parent directory for core module access
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from core.language import get_language_instruction
 
 

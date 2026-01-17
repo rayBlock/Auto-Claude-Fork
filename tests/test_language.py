@@ -32,7 +32,6 @@ class TestLanguageNames:
         """Test that all language names have non-empty values."""
         for code, name in LANGUAGE_NAMES.items():
             assert name, f"Empty name for language code: {code}"
-            assert len(name) > 0
 
     def test_french_name_includes_native(self):
         """Test that French includes native script."""
