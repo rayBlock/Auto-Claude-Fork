@@ -42,7 +42,8 @@
   "tooltips": {
     "archiveTask": "Archiver la tâche",
     "archiveAllDone": "Archiver toutes les tâches terminées",
-    "viewPR": "Ouvrir la pull request dans le navigateur"
+    "viewPR": "Ouvrir la pull request dans le navigateur",
+    "resetToBacklog": "Réinitialiser au backlog pour recommencer à zéro"
   },
   "creation": {
     "title": "Créer une nouvelle tâche",

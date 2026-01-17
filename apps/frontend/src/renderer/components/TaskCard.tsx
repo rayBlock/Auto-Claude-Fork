@@ -311,8 +311,8 @@ export const TaskCard = memo(function TaskCard({
       const result = await resetToBacklog(task.id);
       if (!result.success) {
         toast({
-          title: t('errors:resetFailed') || 'Reset Failed',
-          description: result.error || t('errors:unknownError') || 'An unknown error occurred',
+          title: t('errors:merge.resetFailed'),
+          description: result.error || t('errors:merge.unknownError'),
           variant: 'destructive'
         });
       }
@@ -416,293 +416,293 @@ export const TaskCard = memo(function TaskCard({
               {displayTitle}
             </h3>
 
-        {/* Description - sanitized to handle markdown content (memoized) */}
-        {sanitizedDescription && (
-          <p className="mt-2 text-xs text-muted-foreground line-clamp-2">
-            {sanitizedDescription}
-          </p>
-        )}
+            {/* Description - sanitized to handle markdown content (memoized) */}
+            {sanitizedDescription && (
+              <p className="mt-2 text-xs text-muted-foreground line-clamp-2">
+                {sanitizedDescription}
+              </p>
+            )}
 
-        {/* Metadata badges */}
-        {(task.metadata || isStuck || isIncomplete || hasActiveExecution || reviewReasonInfo) && (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {/* Stuck indicator - highest priority */}
-            {isStuck && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-warning/10 text-warning border-warning/30 badge-priority-urgent"
-              >
-                <AlertTriangle className="h-2.5 w-2.5" />
-                {t('labels.stuck')}
-              </Badge>
-            )}
-            {/* Incomplete indicator - task in human_review but no subtasks completed */}
-            {isIncomplete && !isStuck && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-orange-500/10 text-orange-400 border-orange-500/30"
-              >
-                <AlertTriangle className="h-2.5 w-2.5" />
-                {t('labels.incomplete')}
-              </Badge>
-            )}
-            {/* Archived indicator - task has been released */}
-            {task.metadata?.archivedAt && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-muted text-muted-foreground border-border"
-              >
-                <Archive className="h-2.5 w-2.5" />
-                {t('status.archived')}
-              </Badge>
-            )}
-            {/* Execution phase badge - shown when actively running */}
-            {hasActiveExecution && executionPhase && !isStuck && !isIncomplete && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  'text-[10px] px-1.5 py-0.5 flex items-center gap-1',
-                  EXECUTION_PHASE_BADGE_COLORS[executionPhase]
-                )}
-              >
-                <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                {EXECUTION_PHASE_LABELS[executionPhase]}
-              </Badge>
-            )}
-             {/* Status badge - hide when execution phase badge is showing */}
-             {!hasActiveExecution && (
-               <>
-                  {task.status === 'pr_created' ? (
-                    <Badge
-                      variant={getStatusBadgeVariant(task.status)}
-                      className="text-[10px] px-1.5 py-0.5"
-                    >
-                      {getStatusLabel(task.status)}
-                    </Badge>
-                  ) : (
-                   <Badge
-                     variant={isStuck ? 'warning' : isIncomplete ? 'warning' : getStatusBadgeVariant(task.status)}
-                     className="text-[10px] px-1.5 py-0.5"
-                   >
-                     {isStuck ? t('labels.needsRecovery') : isIncomplete ? t('labels.needsResume') : getStatusLabel(task.status)}
-                   </Badge>
-                 )}
-               </>
-             )}
-            {/* Review reason badge - explains why task needs human review */}
-            {reviewReasonInfo && !isStuck && !isIncomplete && (
-              <Badge
-                variant={reviewReasonInfo.variant}
-                className="text-[10px] px-1.5 py-0.5"
-              >
-                {reviewReasonInfo.label}
-              </Badge>
-            )}
-            {/* Category badge with icon */}
-            {task.metadata?.category && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
-              >
-                {CategoryIcon[task.metadata.category] && (
-                  (() => {
-                    const Icon = CategoryIcon[task.metadata.category!];
-                    return <Icon className="h-2.5 w-2.5 mr-0.5" />;
-                  })()
-                )}
-                {TASK_CATEGORY_LABELS[task.metadata.category]}
-              </Badge>
-            )}
-            {/* Impact badge - high visibility for important tasks */}
-            {task.metadata?.impact && (task.metadata.impact === 'high' || task.metadata.impact === 'critical') && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.impact])}
-              >
-                {TASK_IMPACT_LABELS[task.metadata.impact]}
-              </Badge>
-            )}
-            {/* Complexity badge */}
-            {task.metadata?.complexity && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_COMPLEXITY_COLORS[task.metadata.complexity])}
-              >
-                {TASK_COMPLEXITY_LABELS[task.metadata.complexity]}
-              </Badge>
-            )}
-            {/* Priority badge - only show urgent/high */}
-            {task.metadata?.priority && (task.metadata.priority === 'urgent' || task.metadata.priority === 'high') && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_PRIORITY_COLORS[task.metadata.priority])}
-              >
-                {TASK_PRIORITY_LABELS[task.metadata.priority]}
-              </Badge>
-            )}
-            {/* Security severity - always show */}
-            {task.metadata?.securitySeverity && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.securitySeverity])}
-              >
-                {task.metadata.securitySeverity} {t('metadata.severity')}
-              </Badge>
-            )}
-          </div>
-        )}
-
-        {/* Progress section - Phase-aware with animations */}
-        {(task.subtasks.length > 0 || hasActiveExecution || isRunning || isStuck) && (
-          <div className="mt-4">
-            <PhaseProgressIndicator
-              phase={executionPhase}
-              subtasks={task.subtasks}
-              phaseProgress={task.executionProgress?.phaseProgress}
-              isStuck={isStuck}
-              isRunning={isRunning}
-            />
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-4 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>{relativeTime}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {/* Action buttons */}
-            {isStuck ? (
-              <Button
-                variant="warning"
-                size="sm"
-                className="h-7 px-2.5"
-                onClick={handleRecover}
-                disabled={isRecovering}
-              >
-                {isRecovering ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                    {t('labels.recovering')}
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="mr-1.5 h-3 w-3" />
-                    {t('actions.recover')}
-                  </>
-                )}
-              </Button>
-            ) : isIncomplete ? (
-              <div className="flex gap-1">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-7 px-2.5"
-                  onClick={handleStartStop}
-                >
-                  <Play className="mr-1.5 h-3 w-3" />
-                  {t('actions.resume')}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2.5"
-                  onClick={handleResetToBacklog}
-                  disabled={isResetting}
-                  title={t('tooltips.resetToBacklog') || 'Reset to backlog to retry from scratch'}
-                >
-                  {isResetting ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-3 w-3" />
-                  )}
-                </Button>
-              </div>
-            ) : task.status === 'pr_created' ? (
-              <div className="flex gap-1">
-                {task.metadata?.prUrl && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 cursor-pointer"
-                    onClick={handleViewPR}
-                    title={t('tooltips.viewPR')}
+            {/* Metadata badges */}
+            {(task.metadata || isStuck || isIncomplete || hasActiveExecution || reviewReasonInfo) && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {/* Stuck indicator - highest priority */}
+                {isStuck && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-warning/10 text-warning border-warning/30 badge-priority-urgent"
                   >
-                    <GitPullRequest className="h-3 w-3" />
-                  </Button>
+                    <AlertTriangle className="h-2.5 w-2.5" />
+                    {t('labels.stuck')}
+                  </Badge>
                 )}
-                {!task.metadata?.archivedAt && (
+                {/* Incomplete indicator - task in human_review but no subtasks completed */}
+                {isIncomplete && !isStuck && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-orange-500/10 text-orange-400 border-orange-500/30"
+                  >
+                    <AlertTriangle className="h-2.5 w-2.5" />
+                    {t('labels.incomplete')}
+                  </Badge>
+                )}
+                {/* Archived indicator - task has been released */}
+                {task.metadata?.archivedAt && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-muted text-muted-foreground border-border"
+                  >
+                    <Archive className="h-2.5 w-2.5" />
+                    {t('status.archived')}
+                  </Badge>
+                )}
+                {/* Execution phase badge - shown when actively running */}
+                {hasActiveExecution && executionPhase && !isStuck && !isIncomplete && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-[10px] px-1.5 py-0.5 flex items-center gap-1',
+                      EXECUTION_PHASE_BADGE_COLORS[executionPhase]
+                    )}
+                  >
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    {EXECUTION_PHASE_LABELS[executionPhase]}
+                  </Badge>
+                )}
+                {/* Status badge - hide when execution phase badge is showing */}
+                {!hasActiveExecution && (
+                  <>
+                    {task.status === 'pr_created' ? (
+                      <Badge
+                        variant={getStatusBadgeVariant(task.status)}
+                        className="text-[10px] px-1.5 py-0.5"
+                      >
+                        {getStatusLabel(task.status)}
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant={isStuck ? 'warning' : isIncomplete ? 'warning' : getStatusBadgeVariant(task.status)}
+                        className="text-[10px] px-1.5 py-0.5"
+                      >
+                        {isStuck ? t('labels.needsRecovery') : isIncomplete ? t('labels.needsResume') : getStatusLabel(task.status)}
+                      </Badge>
+                    )}
+                  </>
+                )}
+                {/* Review reason badge - explains why task needs human review */}
+                {reviewReasonInfo && !isStuck && !isIncomplete && (
+                  <Badge
+                    variant={reviewReasonInfo.variant}
+                    className="text-[10px] px-1.5 py-0.5"
+                  >
+                    {reviewReasonInfo.label}
+                  </Badge>
+                )}
+                {/* Category badge with icon */}
+                {task.metadata?.category && (
+                  <Badge
+                    variant="outline"
+                    className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
+                  >
+                    {CategoryIcon[task.metadata.category] && (
+                      (() => {
+                        const Icon = CategoryIcon[task.metadata.category!];
+                        return <Icon className="h-2.5 w-2.5 mr-0.5" />;
+                      })()
+                    )}
+                    {TASK_CATEGORY_LABELS[task.metadata.category]}
+                  </Badge>
+                )}
+                {/* Impact badge - high visibility for important tasks */}
+                {task.metadata?.impact && (task.metadata.impact === 'high' || task.metadata.impact === 'critical') && (
+                  <Badge
+                    variant="outline"
+                    className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.impact])}
+                  >
+                    {TASK_IMPACT_LABELS[task.metadata.impact]}
+                  </Badge>
+                )}
+                {/* Complexity badge */}
+                {task.metadata?.complexity && (
+                  <Badge
+                    variant="outline"
+                    className={cn('text-[10px] px-1.5 py-0', TASK_COMPLEXITY_COLORS[task.metadata.complexity])}
+                  >
+                    {TASK_COMPLEXITY_LABELS[task.metadata.complexity]}
+                  </Badge>
+                )}
+                {/* Priority badge - only show urgent/high */}
+                {task.metadata?.priority && (task.metadata.priority === 'urgent' || task.metadata.priority === 'high') && (
+                  <Badge
+                    variant="outline"
+                    className={cn('text-[10px] px-1.5 py-0', TASK_PRIORITY_COLORS[task.metadata.priority])}
+                  >
+                    {TASK_PRIORITY_LABELS[task.metadata.priority]}
+                  </Badge>
+                )}
+                {/* Security severity - always show */}
+                {task.metadata?.securitySeverity && (
+                  <Badge
+                    variant="outline"
+                    className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.securitySeverity])}
+                  >
+                    {task.metadata.securitySeverity} {t('metadata.severity')}
+                  </Badge>
+                )}
+              </div>
+            )}
+
+            {/* Progress section - Phase-aware with animations */}
+            {(task.subtasks.length > 0 || hasActiveExecution || isRunning || isStuck) && (
+              <div className="mt-4">
+                <PhaseProgressIndicator
+                  phase={executionPhase}
+                  subtasks={task.subtasks}
+                  phaseProgress={task.executionProgress?.phaseProgress}
+                  isStuck={isStuck}
+                  isRunning={isRunning}
+                />
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                <span>{relativeTime}</span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {/* Action buttons */}
+                {isStuck ? (
+                  <Button
+                    variant="warning"
+                    size="sm"
+                    className="h-7 px-2.5"
+                    onClick={handleRecover}
+                    disabled={isRecovering}
+                  >
+                    {isRecovering ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                        {t('labels.recovering')}
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="mr-1.5 h-3 w-3" />
+                        {t('actions.recover')}
+                      </>
+                    )}
+                  </Button>
+                ) : isIncomplete ? (
+                  <div className="flex gap-1">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="h-7 px-2.5"
+                      onClick={handleStartStop}
+                    >
+                      <Play className="mr-1.5 h-3 w-3" />
+                      {t('actions.resume')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5"
+                      onClick={handleResetToBacklog}
+                      disabled={isResetting}
+                      title={t('tooltips.resetToBacklog')}
+                    >
+                      {isResetting ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                ) : task.status === 'pr_created' ? (
+                  <div className="flex gap-1">
+                    {task.metadata?.prUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 cursor-pointer"
+                        onClick={handleViewPR}
+                        title={t('tooltips.viewPR')}
+                      >
+                        <GitPullRequest className="h-3 w-3" />
+                      </Button>
+                    )}
+                    {!task.metadata?.archivedAt && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 cursor-pointer"
+                        onClick={handleArchive}
+                        title={t('tooltips.archiveTask')}
+                      >
+                        <Archive className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                ) : task.status === 'done' && !task.metadata?.archivedAt ? (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 cursor-pointer"
+                    className="h-7 px-2.5 hover:bg-muted-foreground/10"
                     onClick={handleArchive}
                     title={t('tooltips.archiveTask')}
                   >
-                    <Archive className="h-3 w-3" />
+                    <Archive className="mr-1.5 h-3 w-3" />
+                    {t('actions.archive')}
                   </Button>
+                ) : (task.status === 'backlog' || task.status === 'in_progress') && (
+                  <Button
+                    variant={isRunning ? 'destructive' : 'default'}
+                    size="sm"
+                    className="h-7 px-2.5"
+                    onClick={handleStartStop}
+                  >
+                    {isRunning ? (
+                      <>
+                        <Square className="mr-1.5 h-3 w-3" />
+                        {t('actions.stop')}
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-1.5 h-3 w-3" />
+                        {t('actions.start')}
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                {/* Move to menu for keyboard accessibility */}
+                {statusMenuItems && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={t('actions.taskActions')}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuLabel>{t('actions.moveTo')}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {statusMenuItems}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
-            ) : task.status === 'done' && !task.metadata?.archivedAt ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2.5 hover:bg-muted-foreground/10"
-                onClick={handleArchive}
-                title={t('tooltips.archiveTask')}
-              >
-                <Archive className="mr-1.5 h-3 w-3" />
-                {t('actions.archive')}
-              </Button>
-            ) : (task.status === 'backlog' || task.status === 'in_progress') && (
-              <Button
-                variant={isRunning ? 'destructive' : 'default'}
-                size="sm"
-                className="h-7 px-2.5"
-                onClick={handleStartStop}
-              >
-                {isRunning ? (
-                  <>
-                    <Square className="mr-1.5 h-3 w-3" />
-                    {t('actions.stop')}
-                  </>
-                ) : (
-                  <>
-                    <Play className="mr-1.5 h-3 w-3" />
-                    {t('actions.start')}
-                  </>
-                )}
-              </Button>
-            )}
-
-            {/* Move to menu for keyboard accessibility */}
-            {statusMenuItems && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={t('actions.taskActions')}
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenuLabel>{t('actions.moveTo')}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {statusMenuItems}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            </div>
+            {/* Close content wrapper for selectable mode */}
           </div>
-        </div>
-        {/* Close content wrapper for selectable mode */}
-        </div>
-        {/* Close flex container for selectable mode */}
+          {/* Close flex container for selectable mode */}
         </div>
       </CardContent>
     </Card>

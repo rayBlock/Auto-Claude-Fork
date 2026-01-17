@@ -693,7 +693,7 @@ export interface PersistStatusResult {
 export async function persistTaskStatus(
   taskId: string,
   status: TaskStatus,
-  options?: { forceCleanup?: boolean }
+  options?: { forceCleanup?: boolean; resetSubtasks?: boolean }
 ): Promise<PersistStatusResult> {
   const store = useTaskStore.getState();
 
@@ -746,7 +746,8 @@ export async function resetToBacklog(taskId: string): Promise<PersistStatusResul
   const store = useTaskStore.getState();
 
   // First persist the status change
-  const result = await persistTaskStatus(taskId, 'backlog');
+  // passing resetSubtasks: true to clear subtasks in implementation_plan.json
+  const result = await persistTaskStatus(taskId, 'backlog', { resetSubtasks: true });
 
   if (result.success) {
     // Clear subtasks so the agent will re-plan on restart

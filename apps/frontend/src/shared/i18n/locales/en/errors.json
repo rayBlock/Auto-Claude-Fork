@@ -9,6 +9,8 @@
   "merge": {
     "success": "Merge Successful",
     "failed": "Merge Failed",
+    "resetFailed": "Reset Failed",
+    "unknownError": "An unknown error occurred",
     "timeout": "Merge process timed out.",
     "timeoutWithOutput": "Merge process timed out. Some output was received - please run `git status` in your project directory to check if the merge completed partially.",
     "timeoutNoOutput": "Merge process timed out. No output received - the merge may not have started.",

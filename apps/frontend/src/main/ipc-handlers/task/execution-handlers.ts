@@ -541,7 +541,7 @@ export function registerTaskExecutionHandlers(
       _,
       taskId: string,
       status: TaskStatus,
-      options?: { forceCleanup?: boolean }
+      options?: { forceCleanup?: boolean; resetSubtasks?: boolean }
     ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> => {
       // Find task and project first (needed for worktree check)
       const { task, project } = findTaskAndProject(taskId);
@@ -678,8 +678,12 @@ export function registerTaskExecutionHandlers(
 
         // When resetting to backlog, also clear subtasks from the plan file
         // This ensures the agent will re-plan on restart instead of executing a stale plan
-        if (status === 'backlog') {
-          await clearPlanSubtasks(planPath, project.id);
+        // CodeRabbit: Gate behind an explicit reset signal and handle failures
+        if (status === 'backlog' && options?.resetSubtasks) {
+          const cleared = await clearPlanSubtasks(planPath, project.id);
+          if (!cleared) {
+            return { success: false, error: 'Failed to clear subtasks for reset to backlog' };
+          }
           console.warn('[TASK_UPDATE_STATUS] Cleared subtasks for reset to backlog:', taskId);
         }
 
@@ -926,9 +930,9 @@ export function registerTaskExecutionHandlers(
           plan.status = newStatus;
           plan.planStatus = newStatus === 'done' ? 'completed'
             : newStatus === 'in_progress' ? 'in_progress'
-            : newStatus === 'ai_review' ? 'review'
-            : newStatus === 'human_review' ? 'review'
-            : 'pending';
+              : newStatus === 'ai_review' ? 'review'
+                : newStatus === 'human_review' ? 'review'
+                  : 'pending';
           plan.updated_at = new Date().toISOString();
 
           // Add recovery note

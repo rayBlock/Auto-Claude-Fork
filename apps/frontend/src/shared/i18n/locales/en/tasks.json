@@ -42,7 +42,8 @@
   "tooltips": {
     "archiveTask": "Archive task",
     "archiveAllDone": "Archive all done tasks",
-    "viewPR": "Open pull request in browser"
+    "viewPR": "Open pull request in browser",
+    "resetToBacklog": "Reset to backlog to retry from scratch"
   },
   "creation": {
     "title": "Create New Task",

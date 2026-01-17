@@ -14,6 +14,18 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 
 /**
+ * Check if an error is a "file not found" error (ENOENT)
+ */
+function isEnoentError(e: unknown): boolean {
+  return (
+    e !== null &&
+    typeof e === 'object' &&
+    'code' in e &&
+    (e as NodeJS.ErrnoException).code === 'ENOENT'
+  );
+}
+
+/**
  * Get the path to the settings file
  */
 export function getSettingsPath(): string {
@@ -37,7 +49,7 @@ export function readSettingsFile(): Record<string, unknown> | undefined {
   } catch (e) {
     // Return undefined if file doesn't exist or on parse error - caller will use defaults
     // ENOENT means file doesn't exist, which is expected on first run
-    if (e && typeof e === 'object' && 'code' in e && (e as NodeJS.ErrnoException).code !== 'ENOENT') {
+    if (!isEnoentError(e)) {
       console.warn('[settings-utils] Failed to read settings file:', e);
     }
     return undefined;
@@ -79,7 +91,7 @@ export async function readSettingsFileAsync(): Promise<Record<string, unknown> |
   } catch (e) {
     // Return undefined if file doesn't exist or on parse error - caller will use defaults
     // ENOENT means file doesn't exist, which is expected on first run
-    if (e && typeof e === 'object' && 'code' in e && (e as NodeJS.ErrnoException).code !== 'ENOENT') {
+    if (!isEnoentError(e)) {
       // Log unexpected errors (but not missing file, which is normal)
       console.warn('[settings-utils] Failed to read settings file:', e);
     }
