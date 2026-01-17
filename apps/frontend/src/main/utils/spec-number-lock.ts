@@ -16,7 +16,7 @@ import {
   unlinkSync,
   readFileSync
 } from 'fs';
-import path from 'path';
+import { joinPaths } from '../platform';
 
 export class SpecNumberLockError extends Error {
   constructor(message: string) {
@@ -34,8 +34,8 @@ export class SpecNumberLock {
 
   constructor(projectDir: string) {
     this.projectDir = projectDir;
-    this.lockDir = path.join(projectDir, '.auto-claude', '.locks');
-    this.lockFile = path.join(this.lockDir, 'spec-numbering.lock');
+    this.lockDir = joinPaths(projectDir, '.auto-claude', '.locks');
+    this.lockFile = joinPaths(this.lockDir, 'spec-numbering.lock');
   }
 
   /**
@@ -148,17 +148,17 @@ export class SpecNumberLock {
     const specsBase = autoBuildPath || '.auto-claude';
 
     // 1. Scan main project specs
-    const mainSpecsDir = path.join(this.projectDir, specsBase, 'specs');
+    const mainSpecsDir = joinPaths(this.projectDir, specsBase, 'specs');
     maxNumber = Math.max(maxNumber, this.scanSpecsDir(mainSpecsDir));
 
     // 2. Scan all worktree specs
-    const worktreesDir = path.join(this.projectDir, '.auto-claude', 'worktrees', 'tasks');
+    const worktreesDir = joinPaths(this.projectDir, '.auto-claude', 'worktrees', 'tasks');
     if (existsSync(worktreesDir)) {
       try {
         const worktrees = readdirSync(worktreesDir, { withFileTypes: true });
         for (const worktree of worktrees) {
           if (worktree.isDirectory()) {
-            const worktreeSpecsDir = path.join(
+            const worktreeSpecsDir = joinPaths(
               worktreesDir,
               worktree.name,
               specsBase,
