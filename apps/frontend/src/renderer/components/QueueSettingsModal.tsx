@@ -42,11 +42,11 @@ export function QueueSettingsModal({
   const handleSave = () => {
     // Validate the input
     if (maxParallel < 1) {
-      setError('Must be at least 1');
+      setError(t('kanban.queueSettingsModal.validationErrorMin'));
       return;
     }
     if (maxParallel > 10) {
-      setError('Cannot exceed 10');
+      setError(t('kanban.queueSettingsModal.validationErrorMax'));
       return;
     }
 
@@ -66,16 +66,16 @@ export function QueueSettingsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Queue Settings</DialogTitle>
+          <DialogTitle>{t('kanban.queueSettingsModal.title')}</DialogTitle>
           <DialogDescription>
-            Configure the maximum number of tasks that can run in parallel in the "In Progress" board
+            {t('kanban.queueSettingsModal.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="maxParallel">
-              Max Parallel Tasks
+              {t('kanban.queueSettingsModal.maxParallelTasksLabel')}
             </Label>
             <Input
               id="maxParallel"
@@ -90,17 +90,17 @@ export function QueueSettingsModal({
               <p className="text-sm text-destructive">{error}</p>
             )}
             <p className="text-sm text-muted-foreground">
-              When this limit is reached, new tasks will wait in the queue before moving to "In Progress"
+              {t('kanban.queueSettingsModal.maxParallelTasksHint')}
             </p>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common:buttons.cancel')}
           </Button>
           <Button onClick={handleSave}>
-            Save
+            {t('common:buttons.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

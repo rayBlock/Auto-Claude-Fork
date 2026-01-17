@@ -89,6 +89,14 @@
     "deleteWorktree": "Delete Worktree & Mark Done",
     "refreshTasks": "Refresh Tasks",
     "queueSettings": "Queue Settings",
+    "queueSettingsModal": {
+      "title": "Queue Settings",
+      "description": "Configure the maximum number of tasks that can run in parallel in the \"In Progress\" board",
+      "maxParallelTasksLabel": "Max Parallel Tasks",
+      "maxParallelTasksHint": "When this limit is reached, new tasks will wait in the queue before moving to \"In Progress\"",
+      "validationErrorMin": "Must be at least 1",
+      "validationErrorMax": "Cannot exceed 10"
+    },
     "selectAll": "Select all",
     "deselectAll": "Deselect all",
     "selectedCount": "{{count}} selected",

@@ -89,6 +89,14 @@
     "deleteWorktree": "Supprimer le Worktree & Marquer Terminé",
     "refreshTasks": "Actualiser les tâches",
     "queueSettings": "Paramètres de la file d'attente",
+    "queueSettingsModal": {
+      "title": "Paramètres de la file d'attente",
+      "description": "Configurez le nombre maximum de tâches pouvant s'exécuter en parallèle dans le tableau \"En cours\"",
+      "maxParallelTasksLabel": "Tâches parallèles max",
+      "maxParallelTasksHint": "Lorsque cette limite est atteinte, les nouvelles tâches attendront dans la file d'attente avant de passer à \"En cours\"",
+      "validationErrorMin": "Doit être au moins 1",
+      "validationErrorMax": "Ne peut pas dépasser 10"
+    },
     "selectAll": "Tout sélectionner",
     "deselectAll": "Tout désélectionner",
     "selectedCount": "{{count}} sélectionné(s)",

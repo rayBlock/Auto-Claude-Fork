@@ -362,6 +362,7 @@ const DroppableColumn = memo(function DroppableColumn({
                   className="h-7 w-7 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors"
                   onClick={onQueueAll}
                   title={t('queue.queueAll')}
+                  aria-label={t('kanban.queueAllAriaLabel')}
                 >
                   <ListPlus className="h-4 w-4" />
                 </Button>
@@ -963,13 +964,15 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       />
 
       {/* Queue Settings Modal */}
-      <QueueSettingsModal
-        open={showQueueSettings}
-        onOpenChange={setShowQueueSettings}
-        projectId={projectId ?? ''}
-        currentMaxParallel={maxParallelTasks}
-        onSave={handleSaveQueueSettings}
-      />
+      {projectId && (
+        <QueueSettingsModal
+          open={showQueueSettings}
+          onOpenChange={setShowQueueSettings}
+          projectId={projectId}
+          currentMaxParallel={maxParallelTasks}
+          onSave={handleSaveQueueSettings}
+        />
+      )}
 
       {/* Bulk PR creation dialog */}
       <BulkPRDialog
