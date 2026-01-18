@@ -115,10 +115,12 @@ export function findPythonCommand(): string | null {
  */
 function getPythonVersion(pythonCmd: string): string | null {
   try {
-    const version = execSync(`${pythonCmd} --version`, {
+    const [cmd, args] = parsePythonCommand(pythonCmd);
+    const version = execFileSync(cmd, [...args, '--version'], {
       stdio: 'pipe',
       timeout: 5000,
-      windowsHide: true
+      windowsHide: true,
+      shell: false
     }).toString().trim();
 
     // Extract version number from "Python 3.10.5" format
@@ -210,7 +212,7 @@ export function parsePythonCommand(pythonPath: string): [string, string[]] {
   }
 
   if ((cleanPath.startsWith('"') && cleanPath.endsWith('"')) ||
-      (cleanPath.startsWith("'") && cleanPath.endsWith("'"))) {
+    (cleanPath.startsWith("'") && cleanPath.endsWith("'"))) {
     cleanPath = cleanPath.slice(1, -1);
     // Validate again after quote removal
     if (cleanPath === '') {
@@ -379,7 +381,7 @@ export function validatePythonPath(pythonPath: string): PythonPathValidation {
   // Strip surrounding quotes for validation
   let cleanPath = trimmedPath;
   if ((cleanPath.startsWith('"') && cleanPath.endsWith('"')) ||
-      (cleanPath.startsWith("'") && cleanPath.endsWith("'"))) {
+    (cleanPath.startsWith("'") && cleanPath.endsWith("'"))) {
     cleanPath = cleanPath.slice(1, -1);
   }
 
