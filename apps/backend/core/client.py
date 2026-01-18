@@ -875,7 +875,44 @@ def create_client(
 
     # Write settings to a file in the project directory
     settings_file = project_dir / ".claude_settings.json"
-    with open(settings_file, "w") as f:
+    # Merge with existing settings to preserve user's custom permissions and other keys
+    try:
+        if settings_file.exists():
+            with open(settings_file, "r", encoding="utf-8") as f:
+                existing_settings = json.load(f)
+
+            if isinstance(existing_settings, dict):
+                # Extract existing allow list
+                existing_permissions = existing_settings.get("permissions", {})
+                if isinstance(existing_permissions, dict):
+                    existing_allow = existing_permissions.get("allow", [])
+                    if isinstance(existing_allow, list):
+                        # Filter to only valid string permissions (security: prevent injection)
+                        valid_existing = [p for p in existing_allow if isinstance(p, str)]
+                        system_allow = security_settings["permissions"]["allow"]
+                        # Combined and deduplicated list
+                        merged_allow = list(dict.fromkeys(valid_existing + system_allow))
+
+                        # Update system settings with merged allow list
+                        security_settings["permissions"]["allow"] = merged_allow
+
+                # Merge other top-level keys from existing into system settings
+                # System settings (sandbox, permissions) take precedence if keys collide,
+                # except for 'allow' which we merged above.
+                for key, value in existing_settings.items():
+                    if key not in security_settings:
+                        security_settings[key] = value
+                    elif key == "permissions" and isinstance(value, dict):
+                        # Merge other permission keys (e.g., defaultMode) if not in system settings
+                        for pk, pv in value.items():
+                            if pk not in security_settings["permissions"]:
+                                security_settings["permissions"][pk] = pv
+    except (json.JSONDecodeError, AttributeError, TypeError, OSError) as e:
+        logger.warning(
+            f"Could not merge settings from {settings_file}, some user settings may be lost. Error: {e}"
+        )
+
+    with open(settings_file, "w", encoding="utf-8") as f:
         json.dump(security_settings, f, indent=2)
 
     print(f"Security settings: {settings_file}")
