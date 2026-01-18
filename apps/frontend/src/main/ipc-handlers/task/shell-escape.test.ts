@@ -76,15 +76,15 @@ describe('escapePathForShell', () => {
     });
 
     it('should pass through safe Windows paths unchanged', () => {
-      expect(escapePathForShell('C:\\Users\\name\\project', 'win32')).toBe('C:\\Users\\name\\project');
+      expect(escapePathForShell('C:\\SomeFolder\\project', 'win32')).toBe('C:\\SomeFolder\\project');
     });
 
     it('should allow paths with spaces', () => {
-      expect(escapePathForShell('C:\\Program Files\\app', 'win32')).toBe('C:\\Program Files\\app');
+      expect(escapePathForShell('C:\\Some Folder\\app', 'win32')).toBe('C:\\Some Folder\\app');
     });
 
     it('should allow paths with parentheses', () => {
-      expect(escapePathForShell('C:\\Program Files (x86)\\app', 'win32')).toBe('C:\\Program Files (x86)\\app');
+      expect(escapePathForShell('C:\\Some Folder (x86)\\app', 'win32')).toBe('C:\\Some Folder (x86)\\app');
     });
   });
 
@@ -100,8 +100,8 @@ describe('escapePathForShell', () => {
     });
 
     it('should pass through safe Unix paths unchanged', () => {
-      expect(escapePathForShell('/usr/local/bin', 'linux')).toBe('/usr/local/bin');
-      expect(escapePathForShell('/Users/name/project', 'darwin')).toBe('/Users/name/project');
+      expect(escapePathForShell('/some/path', 'linux')).toBe('/some/path');
+      expect(escapePathForShell('/home/user/project', 'darwin')).toBe('/home/user/project');
     });
 
     it('should allow paths with spaces', () => {
@@ -220,7 +220,7 @@ describe('escapePathForAppleScript', () => {
     });
 
     it('should pass through safe paths unchanged', () => {
-      expect(escapePathForAppleScript('/Users/name/project')).toBe('/Users/name/project');
+      expect(escapePathForAppleScript('/some/path/project')).toBe('/some/path/project');
     });
 
     it('should allow paths with spaces', () => {

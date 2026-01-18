@@ -5,15 +5,17 @@
  * or rejecting dangerous characters in file paths.
  */
 
+import { isWindows } from '../../platform';
+import { OS } from '../../platform/types';
+
 /**
  * Escape a path for use in shell commands.
  * Prevents command injection by escaping or rejecting dangerous characters.
  *
- * @param filePath - The path to escape
- * @param platform - Target platform ('win32', 'darwin', 'linux')
+ * @param platform - Optional target platform (defaults to current OS)
  * @returns Escaped path string safe for shell use, or null if path is invalid
  */
-export function escapePathForShell(filePath: string, platform: NodeJS.Platform): string | null {
+export function escapePathForShell(filePath: string, platform: NodeJS.Platform = process.platform): string | null {
   // Reject paths with null bytes (always dangerous)
   if (filePath.includes('\0')) {
     return null;
@@ -24,7 +26,10 @@ export function escapePathForShell(filePath: string, platform: NodeJS.Platform):
     return null;
   }
 
-  if (platform === 'win32') {
+  // Determine if we are on Windows using platform helpers when possible
+  const isWin = platform === OS.Windows;
+
+  if (isWin) {
     // Windows: Reject paths with characters that could escape cmd.exe quoting
     // These characters can break out of double-quoted strings in cmd
     const dangerousWinChars = /[<>|&^%!`]/;

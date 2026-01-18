@@ -22,7 +22,7 @@ import {
 import { persistPlanStatus, updateTaskMetadataPrUrl } from './plan-file-utils';
 import { getIsolatedGitEnv } from '../../utils/git-isolation';
 import { escapePathForShell, escapePathForAppleScript } from './shell-escape';
-import { killProcessGracefully, isWindows, isMacOS } from '../../platform';
+import { killProcessGracefully, isWindows, isMacOS, isLinux } from '../../platform';
 
 // Regex pattern for validating git branch names
 const GIT_BRANCH_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
@@ -1305,8 +1305,8 @@ function getTaskBaseBranch(specDir: string): string | undefined {
       // Return baseBranch if explicitly set (not the __project_default__ marker)
       // Also validate it's a valid branch name to prevent malformed git commands
       if (metadata.baseBranch &&
-          metadata.baseBranch !== '__project_default__' &&
-          GIT_BRANCH_REGEX.test(metadata.baseBranch)) {
+        metadata.baseBranch !== '__project_default__' &&
+        GIT_BRANCH_REGEX.test(metadata.baseBranch)) {
         return metadata.baseBranch;
       }
     }
@@ -1416,7 +1416,7 @@ function parsePRJsonOutput(stdout: string): ParsedPRResult | null {
     // Handle both snake_case (from Python) and camelCase field names
     // Default success to false to avoid masking failures when field is missing
     const rawPrUrl = typeof parsed.pr_url === 'string' ? parsed.pr_url :
-                     typeof parsed.prUrl === 'string' ? parsed.prUrl : undefined;
+      typeof parsed.prUrl === 'string' ? parsed.prUrl : undefined;
 
     // Validate PR URL is a valid GitHub URL for robustness
     const validatedPrUrl = rawPrUrl && isValidGitHubUrl(rawPrUrl) ? rawPrUrl : undefined;
@@ -1425,7 +1425,7 @@ function parsePRJsonOutput(stdout: string): ParsedPRResult | null {
       success: typeof parsed.success === 'boolean' ? parsed.success : false,
       prUrl: validatedPrUrl,
       alreadyExists: typeof parsed.already_exists === 'boolean' ? parsed.already_exists :
-                     typeof parsed.alreadyExists === 'boolean' ? parsed.alreadyExists : undefined,
+        typeof parsed.alreadyExists === 'boolean' ? parsed.alreadyExists : undefined,
       error: typeof parsed.error === 'string' ? parsed.error : undefined
     };
   } catch {
@@ -2018,8 +2018,8 @@ export function registerWorktreeHandlers(
               // Check if merge might have succeeded before the hang
               // Look for success indicators in the output
               const mayHaveSucceeded = stdout.includes('staged') ||
-                                       stdout.includes('Successfully merged') ||
-                                       stdout.includes('Changes from');
+                stdout.includes('Successfully merged') ||
+                stdout.includes('Changes from');
 
               if (mayHaveSucceeded) {
                 debug('TIMEOUT: Process hung but merge may have succeeded based on output');
@@ -2835,11 +2835,8 @@ export function registerWorktreeHandlers(
           return { success: false, error: 'Worktree path does not exist' };
         }
 
-        // Use platform helpers for OS detection
-        const platform = process.platform;
-
         // Validate and escape the path to prevent command injection
-        const escapedPath = escapePathForShell(worktreePath, platform);
+        const escapedPath = escapePathForShell(worktreePath, process.platform);
         if (escapedPath === null) {
           return { success: false, error: 'Invalid path: contains unsafe characters' };
         }
