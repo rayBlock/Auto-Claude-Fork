@@ -16,6 +16,7 @@ import copy
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -887,8 +888,13 @@ def create_client(
                 if isinstance(existing_permissions, dict):
                     existing_allow = existing_permissions.get("allow", [])
                     if isinstance(existing_allow, list):
-                        # Filter to only valid string permissions (security: prevent injection)
-                        valid_existing = [p for p in existing_allow if isinstance(p, str)]
+                        # Filter to only valid string permissions (security: prevent path injection)
+                        # Valid pattern: [a-zA-Z0-9_-]+(\(\*\))? or standard tool calls
+                        permission_regex = re.compile(r"^[a-zA-Z0-9_\-\.\/]+(\(\*\))?$")
+                        valid_existing = [
+                            p for p in existing_allow 
+                            if isinstance(p, str) and permission_regex.match(p)
+                        ]
                         system_allow = security_settings["permissions"]["allow"]
                         # Combined and deduplicated list
                         merged_allow = list(dict.fromkeys(valid_existing + system_allow))
