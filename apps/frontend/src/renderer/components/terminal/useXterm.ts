@@ -108,6 +108,7 @@ export function useXterm({ terminalId, onCommandEnter, onResize, onDimensionsRea
     const platform = getPlatform();
     const isWindows = platform.includes('win');
     const isLinux = platform.includes('linux');
+    const isMacOS = platform.includes('mac') || platform.includes('darwin');
 
     // Helper function to handle copy to clipboard
     // Returns true if selection exists and copy was attempted, false if no selection
@@ -212,6 +213,14 @@ export function useXterm({ terminalId, onCommandEnter, onResize, onDimensionsRea
         event.preventDefault(); // Prevent browser's default paste behavior
         handlePasteFromClipboard();
         return false; // Prevent xterm from sending literal ^V
+      }
+
+      // Handle CMD+V paste (macOS only)
+      // We return false here to allow the browser's native paste behavior to handle it.
+      // This is more reliable on macOS than programmatic reading from the navigator.clipboard.
+      const isMacPasteShortcut = event.metaKey && (event.key === 'v' || event.key === 'V') && event.type === 'keydown';
+      if (isMacPasteShortcut && isMacOS) {
+        return false;
       }
 
       // Handle all other keys in xterm
