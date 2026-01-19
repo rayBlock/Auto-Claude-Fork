@@ -370,7 +370,13 @@ Examples:
             print()
 
             # Execute run.py - replace current process
-            os.execv(sys.executable, run_cmd)
+            # On Windows, os.execv doesn't work as expected for process replacement,
+            # so we use subprocess.run and exit with its return code.
+            if sys.platform == "win32":
+                result = subprocess.run(run_cmd)
+                sys.exit(result.returncode)
+            else:
+                os.execv(sys.executable, run_cmd)
 
         sys.exit(0)
 

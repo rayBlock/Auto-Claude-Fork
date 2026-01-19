@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -526,9 +527,25 @@ class WorktreeManager:
             )
 
         # Create worktree with new branch from the start point (remote preferred)
-        result = self._run_git(
-            ["worktree", "add", "-b", branch_name, str(worktree_path), start_point]
-        )
+        # On Windows, standard 'worktree add' often fails with index errors
+        # if the worktree path is on a different drive or due to path length issues.
+        # Using --no-checkout + read-tree/checkout-index is more robust.
+        if sys.platform == "win32":
+            result = self._run_git(
+                ["worktree", "add", "--no-checkout", "-b", branch_name, str(worktree_path), start_point]
+            )
+            if result.returncode == 0:
+                # Step 1: Read tree into worktree's index
+                read_result = self._run_git(["read-tree", "HEAD"], cwd=worktree_path)
+                # Step 2: Checkout files from index
+                checkout_result = self._run_git(["checkout-index", "-a", "-f"], cwd=worktree_path)
+
+                if read_result.returncode != 0 or checkout_result.returncode != 0:
+                    result = read_result if read_result.returncode != 0 else checkout_result
+        else:
+            result = self._run_git(
+                ["worktree", "add", "-b", branch_name, str(worktree_path), start_point]
+            )
 
         if result.returncode != 0:
             raise WorktreeError(
