@@ -367,6 +367,26 @@ def discard_existing_build(project_dir: Path, spec_name: str) -> bool:
     return True
 
 
+def discard_orphaned_worktree(project_dir: Path, spec_name: str) -> bool:
+    """
+    Discard an orphaned worktree by spec name (no task association required).
+
+    Args:
+        project_dir: The project directory
+        spec_name: Name of the spec/worktree to remove
+
+    Returns:
+        True if removal succeeded
+    """
+    try:
+        manager = WorktreeManager(project_dir)
+        manager.remove_worktree(spec_name, delete_branch=True)
+        return True
+    except Exception as e:
+        print_status(f"Failed to discard orphaned worktree '{spec_name}': {e}", "error")
+        return False
+
+
 def check_existing_build(project_dir: Path, spec_name: str) -> bool:
     """
     Check if there's an existing build and offer options.

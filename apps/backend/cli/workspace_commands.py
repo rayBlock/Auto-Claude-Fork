@@ -182,7 +182,7 @@ def _detect_worktree_base_branch(
     config_path = worktree_path / ".auto-claude" / "worktree-config.json"
     if config_path.exists():
         try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config = json.loads(config_path.read_text())
             if config.get("base_branch"):
                 debug(
                     MODULE,
@@ -485,6 +485,17 @@ def handle_discard_command(project_dir: Path, spec_name: str) -> None:
         spec_name: Name of the spec
     """
     discard_existing_build(project_dir, spec_name)
+
+
+def handle_discard_orphaned_worktree_command(project_dir: Path, spec_name: str) -> None:
+    """
+    Handle the --discard-orphaned-worktree command.
+
+    Args:
+        project_dir: Project root directory
+        spec_name: Name of the spec
+    """
+    discard_orphaned_worktree(project_dir, spec_name)
 
 
 def handle_list_worktrees_command(project_dir: Path) -> None:
