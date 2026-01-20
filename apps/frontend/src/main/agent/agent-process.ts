@@ -22,8 +22,8 @@ import { buildMemoryEnvVars } from '../memory-env-builder';
 import { readSettingsFile } from '../settings-utils';
 import type { AppSettings } from '../../shared/types/settings';
 import { getOAuthModeClearVars } from './env-utils';
-import { getAugmentedEnv } from '../env-utils';
-import { getToolInfo, getClaudeCliPathForSdk } from '../cli-tool-manager';
+import { getAugmentedEnv, getGitBashEnv } from '../env-utils';
+import { getToolInfo } from '../cli-tool-manager';
 import { killProcessGracefully } from '../platform';
 
 /**
@@ -41,59 +41,6 @@ const CLI_TOOL_ENV_MAP: Readonly<Record<CliTool, string>> = {
 } as const;
 
 
-function deriveGitBashPath(gitExePath: string): string | null {
-  if (process.platform !== 'win32') {
-    return null;
-  }
-
-  try {
-    const gitDir = path.dirname(gitExePath);  // e.g., D:\...\Git\mingw64\bin
-    const gitDirName = path.basename(gitDir).toLowerCase();
-
-    // Find Git installation root
-    let gitRoot: string;
-
-    if (gitDirName === 'cmd') {
-      // .../Git/cmd/git.exe -> .../Git
-      gitRoot = path.dirname(gitDir);
-    } else if (gitDirName === 'bin') {
-      // Could be .../Git/bin/git.exe OR .../Git/mingw64/bin/git.exe
-      const parent = path.dirname(gitDir);
-      const parentName = path.basename(parent).toLowerCase();
-      if (parentName === 'mingw64' || parentName === 'mingw32') {
-        // .../Git/mingw64/bin/git.exe -> .../Git
-        gitRoot = path.dirname(parent);
-      } else {
-        // .../Git/bin/git.exe -> .../Git
-        gitRoot = parent;
-      }
-    } else {
-      // Unknown structure - try to find 'bin' sibling
-      gitRoot = path.dirname(gitDir);
-    }
-
-    // Bash.exe is in Git/bin/bash.exe
-    const bashPath = path.join(gitRoot, 'bin', 'bash.exe');
-
-    if (existsSync(bashPath)) {
-      console.log('[AgentProcess] Derived git-bash path:', bashPath);
-      return bashPath;
-    }
-
-    // Fallback: check one level up if gitRoot didn't work
-    const altBashPath = path.join(path.dirname(gitRoot), 'bin', 'bash.exe');
-    if (existsSync(altBashPath)) {
-      console.log('[AgentProcess] Found git-bash at alternate path:', altBashPath);
-      return altBashPath;
-    }
-
-    console.warn('[AgentProcess] Could not find bash.exe from git path:', gitExePath);
-    return null;
-  } catch (error) {
-    console.error('[AgentProcess] Error deriving git-bash path:', error);
-    return null;
-  }
-}
 
 /**
  * Process spawning and lifecycle management
@@ -134,9 +81,6 @@ export class AgentProcessManager {
    * Common issue: CLI tools installed via Homebrew or other non-standard locations
    * are not in subprocess PATH when app launches from Finder/Dock.
    *
-   * For 'claude' tool specifically, uses getClaudeCliPathForSdk() which returns null
-   * for Windows .cmd files, allowing the SDK to use its bundled claude.exe instead.
-   *
    * @param toolName - Name of the CLI tool (e.g., 'claude', 'gh')
    * @returns Record with env var set if tool was detected
    */
@@ -145,23 +89,10 @@ export class AgentProcessManager {
     const envVarName = CLI_TOOL_ENV_MAP[toolName];
     if (!process.env[envVarName]) {
       try {
-        // For 'claude' tool, use getClaudeCliPathForSdk() which returns null for Windows .cmd files
-        // This allows the Claude Agent SDK to use its bundled claude.exe instead
-        if (toolName === 'claude') {
-          const cliPath = getClaudeCliPathForSdk();
-          if (cliPath) {
-            env[envVarName] = cliPath;
-            console.log(`[AgentProcess] Setting ${envVarName}:`, cliPath, '(source: cli-tool-manager)');
-          } else {
-            console.log(`[AgentProcess] Claude CLI is .cmd file on Windows, not setting ${envVarName} - SDK will use bundled CLI`);
-          }
-        } else {
-          // For other tools, use standard detection
-          const toolInfo = getToolInfo(toolName);
-          if (toolInfo.found && toolInfo.path) {
-            env[envVarName] = toolInfo.path;
-            console.log(`[AgentProcess] Setting ${envVarName}:`, toolInfo.path, `(source: ${toolInfo.source})`);
-          }
+        const toolInfo = getToolInfo(toolName);
+        if (toolInfo.found && toolInfo.path) {
+          env[envVarName] = toolInfo.path;
+          console.log(`[AgentProcess] Setting ${envVarName}:`, toolInfo.path, `(source: ${toolInfo.source})`);
         }
       } catch (error) {
         console.warn(`[AgentProcess] Failed to detect ${toolName} CLI path:`, error instanceof Error ? error.message : String(error));
@@ -180,21 +111,7 @@ export class AgentProcessManager {
 
     // On Windows, detect and pass git-bash path for Claude Code CLI
     // Electron can detect git via where.exe, but Python subprocess may not have the same PATH
-    const gitBashEnv: Record<string, string> = {};
-    if (process.platform === 'win32' && !process.env.CLAUDE_CODE_GIT_BASH_PATH) {
-      try {
-        const gitInfo = getToolInfo('git');
-        if (gitInfo.found && gitInfo.path) {
-          const bashPath = deriveGitBashPath(gitInfo.path);
-          if (bashPath) {
-            gitBashEnv['CLAUDE_CODE_GIT_BASH_PATH'] = bashPath;
-            console.log('[AgentProcess] Setting CLAUDE_CODE_GIT_BASH_PATH:', bashPath);
-          }
-        }
-      } catch (error) {
-        console.warn('[AgentProcess] Failed to detect git-bash path:', error);
-      }
-    }
+    const gitBashEnv = getGitBashEnv();
 
     // Detect and pass CLI tool paths to Python backend
     const claudeCliEnv = this.detectAndSetCliPath('claude');
