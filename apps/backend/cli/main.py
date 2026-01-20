@@ -40,6 +40,7 @@ from .workspace_commands import (
     handle_cleanup_worktrees_command,
     handle_create_pr_command,
     handle_discard_command,
+    handle_discard_orphaned_worktree_command,
     handle_list_worktrees_command,
     handle_merge_command,
     handle_review_command,
@@ -153,6 +154,11 @@ Environment Variables:
         "--discard",
         action="store_true",
         help="Discard an existing build (requires confirmation)",
+    )
+    build_group.add_argument(
+        "--discard-orphaned-worktree",
+        action="store_true",
+        help="Discard an orphaned worktree (no task association required)",
     )
     build_group.add_argument(
         "--create-pr",
@@ -419,6 +425,10 @@ def _run_cli() -> None:
 
     if args.discard:
         handle_discard_command(project_dir, spec_dir.name)
+        return
+
+    if args.discard_orphaned_worktree:
+        handle_discard_orphaned_worktree_command(project_dir, spec_dir.name)
         return
 
     if args.create_pr:

@@ -487,6 +487,17 @@ def handle_discard_command(project_dir: Path, spec_name: str) -> None:
     discard_existing_build(project_dir, spec_name)
 
 
+def handle_discard_orphaned_worktree_command(project_dir: Path, spec_name: str) -> None:
+    """
+    Handle the --discard-orphaned-worktree command.
+
+    Args:
+        project_dir: Project root directory
+        spec_name: Name of the spec
+    """
+    discard_orphaned_worktree(project_dir, spec_name)
+
+
 def handle_list_worktrees_command(project_dir: Path) -> None:
     """
     Handle the --list-worktrees command.

@@ -1,0 +1,639 @@
+From b213bbbf9cf5c44732e2bae31f8301b3bf4dd3d1 Mon Sep 17 00:00:00 2001
+From: Bob Banks <azbob27@gmail.com>
+Date: Mon, 5 Jan 2026 18:01:52 -0700
+Subject: [PATCH] fix(windows): fix coding phase startup issues (#609)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Fix os.execv() not working on Windows by using subprocess.run()
+- Fix git worktree creation "Could not reset index file" error using
+  read-tree + checkout-index approach instead of standard worktree add
+- Add bug report documentation for #609
+- Add resume/restart guide for interrupted builds
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+---
+ BUG_REPORT_609_Windows_Coding_Phase.md | 218 +++++++++++++++++++
+ apps/backend/core/worktree.py          |  50 ++++-
+ apps/backend/runners/spec_runner.py    |   9 +-
+ docs/RESUME_RESTART_GUIDE.md           | 285 +++++++++++++++++++++++++
+ 4 files changed, 554 insertions(+), 8 deletions(-)
+ create mode 100644 BUG_REPORT_609_Windows_Coding_Phase.md
+ create mode 100644 docs/RESUME_RESTART_GUIDE.md
+
+diff --git a/BUG_REPORT_609_Windows_Coding_Phase.md b/BUG_REPORT_609_Windows_Coding_Phase.md
+new file mode 100644
+index 0000000000..d815914236
+--- /dev/null
++++ b/BUG_REPORT_609_Windows_Coding_Phase.md
+@@ -0,0 +1,218 @@
++# Bug Report: Windows - Coding Phase Never Starts (404 Model Error)
++
++**Related Issue:** #609
++
++## Two Distinct Issues
++
++This bug report covers two separate issues that both prevented the coding phase from working on Windows:
++
++| Aspect | Issue #609 (Process Spawn) | Model ID Issue (API Error) |
++|--------|---------------------------|---------------------------|
++| **Symptom** | Coding phase never starts | Coding phase starts but fails with 404 |
++| **Error** | Process doesn't spawn | `API Error: 404 model not found` |
++| **Root Cause** | `os.execv()` + worktree issues | Wrong model ID in `phase_config.py` |
++| **Fixes** | subprocess.run, read-tree/checkout-index | Correct model ID to `20250929` |
++
++The #609 fixes got the process to **start**, but then the model ID bug caused it to **fail immediately**. Both needed to be fixed for the full pipeline to work.
++
++---
++
++## Environment Details
++- **OS:** Windows 10 (MSYS_NT-10.0-19045)
++- **Python Version:** 3.12
++- **Node.js Version:** v24.12.0
++- **Auto Claude Version:** 2.7.2
++- **Claude CLI Version:** 2.0.76
++
++## Issue Description
++
++On Windows, the coding phase fails immediately after planning completes with a 404 API error for an invalid model ID.
++
++### Steps to Reproduce
++1. Open Auto Claude UI on Windows
++2. Create a new spec (any simple task like "add Test 1 to README")
++3. Let planning phase complete
++4. Observe coding phase fails repeatedly with 404 error
++
++### Expected Behavior
++Coding phase should start and execute the implementation plan.
++
++### Actual Behavior
++Coding phase fails immediately with:
++```
++API Error: 404 {"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-4-5-20241022"},"request_id":"req_..."}
++```
++
++The error repeats every ~2 minutes as the system retries.
++
++### Error Messages/Logs
++```
++10:53:12 AM - Continuing implementation...
++10:53:54 AM - API Error: 404 {"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-4-5-20241022"},"request_id":"req_011CWpfBAsqy7Wqn5eCCtnTw"}
++```
++
++## Root Cause Analysis
++
++### Primary Issue: Invalid Model ID in phase_config.py
++**File:** `apps/backend/phase_config.py` (Line 16)
++
++The model ID `claude-sonnet-4-5-20241022` does not exist. The correct model ID is `claude-sonnet-4-5-20250929` (Claude Sonnet 4.5 was released September 29, 2025).
++
++**Evidence:**
++- Frontend `models.ts` already had the correct ID
++- Anthropic API returns 404 for the invalid model
++- Web search confirmed correct model ID
++
++### Secondary Issue: Project .env Override
++**File:** `<project>/.auto-claude/.env`
++
++The project-specific `.env` file had `AUTO_BUILD_MODEL=claude-sonnet-4-5-20241022` which overrides `phase_config.py`, causing the error to persist even after fixing the source code.
++
++---
++
++# Fix History
++
++## Fix 1: Correct Model ID in phase_config.py
++
++**File:** `apps/backend/phase_config.py`
++**Line:** 16
++
++**Before:**
++```python
++MODEL_ID_MAP: dict[str, str] = {
++    "opus": "claude-opus-4-5-20251101",
++    "sonnet": "claude-sonnet-4-5-20241022",  # WRONG - this model doesn't exist
++    "haiku": "claude-haiku-4-5-20251001",
++}
++```
++
++**After:**
++```python
++MODEL_ID_MAP: dict[str, str] = {
++    "opus": "claude-opus-4-5-20251101",
++    "sonnet": "claude-sonnet-4-5-20250929",  # CORRECT - matches Anthropic API
++    "haiku": "claude-haiku-4-5-20251001",
++}
++```
++
++**Status:** Applied and verified working
++
++---
++
++## Fix 2: Comment Out Stale .env Override (Per-Project)
++
++**File:** `<project>/.auto-claude/.env`
++
++**Before:**
++```bash
++# Model override (OPTIONAL)
++AUTO_BUILD_MODEL=claude-sonnet-4-5-20241022
++```
++
++**After:**
++```bash
++# Model override (OPTIONAL)
++# AUTO_BUILD_MODEL=claude-sonnet-4-5-20250929
++```
++
++**Note:** This is a per-project fix. Users who created projects before this fix may have the stale model ID in their project's `.env` file.
++
++**Recommendation:** Let `phase_config.py` be the single source of truth for model IDs. Only use `AUTO_BUILD_MODEL` override for special testing scenarios.
++
++---
++
++## Previously Applied Fixes (From Issue #609)
++
++### Fix 3: os.execv() to subprocess.run() for Windows
++**File:** `apps/backend/runners/spec_runner.py`
++**Lines:** 50, 344-349
++
++**Problem:** `os.execv()` doesn't work correctly on Windows for process replacement.
++
++**Solution:**
++```python
++import subprocess  # Added
++
++# Lines 344-349: Windows fix
++if sys.platform == "win32":
++    result = subprocess.run(run_cmd)
++    sys.exit(result.returncode)
++else:
++    os.execv(sys.executable, run_cmd)
++```
++
++### Fix 4: Git Worktree Creation for Windows
++**File:** `apps/backend/core/worktree.py`
++**Lines:** 22, 335-366
++
++**Problem:** Git worktree creation fails on Windows with "Could not reset index file" error.
++
++**Solution:** Use `read-tree` + `checkout-index` instead of standard worktree checkout on Windows:
++```python
++import sys  # Added to imports
++
++if sys.platform == "win32":
++    result = self._run_git(
++        ["worktree", "add", "--no-checkout", "-b", branch_name, str(worktree_path), self.base_branch]
++    )
++    # Step 1: Read tree into worktree's index
++    read_result = self._run_git(["read-tree", "HEAD"], cwd=worktree_path)
++    # Step 2: Checkout files from index
++    checkout_result = self._run_git(["checkout-index", "-a", "-f"], cwd=worktree_path)
++```
++
++### Fix 5: Git Long Paths
++**Command:** `git config --global core.longpaths true`
++
++**Problem:** Windows has path length limitations that cause errors with deeply nested files.
++
++---
++
++## Verification
++
++After applying all fixes:
++
++1. Kill stale processes:
++   ```powershell
++   taskkill /F /IM python.exe /IM node.exe /IM electron.exe 2>$null
++   ```
++
++2. Restart Auto Claude UI:
++   ```powershell
++   cd <auto-claude-path>
++   npm run dev
++   ```
++
++3. Create and run a test spec - all phases should complete successfully:
++   - Planning phase
++   - Coding phase
++   - Validation phase
++
++---
++
++## Files Modified Summary
++
++| File | Change |
++|------|--------|
++| `apps/backend/phase_config.py` | Fixed sonnet model ID |
++| `apps/backend/runners/spec_runner.py` | Windows subprocess fix |
++| `apps/backend/core/worktree.py` | Windows worktree creation fix |
++| `<project>/.auto-claude/.env` | Comment out stale model override |
++
++---
++
++## Additional Notes
++
++### Stale Process Issue
++Windows does not properly clean up PTY daemon and child processes when Auto Claude UI closes. Before each session, run:
++```powershell
++taskkill /F /IM python.exe /IM node.exe /IM electron.exe 2>$null
++```
++
++### Model ID Verification
++Current valid model IDs (as of January 2026):
++- `claude-opus-4-5-20251101`
++- `claude-sonnet-4-5-20250929`
++- `claude-haiku-4-5-20251001`
++
++Source: [Anthropic API Documentation](https://docs.anthropic.com/en/docs/about-claude/models)
+diff --git a/apps/backend/core/worktree.py b/apps/backend/core/worktree.py
+index ab3b89e3b3..586052eb1b 100644
+--- a/apps/backend/core/worktree.py
++++ b/apps/backend/core/worktree.py
+@@ -19,6 +19,7 @@
+ import re
+ import shutil
+ import subprocess
++import sys
+ from dataclasses import dataclass
+ from pathlib import Path
+ 
+@@ -328,15 +329,52 @@ def create_worktree(self, spec_name: str) -> WorktreeInfo:
+         self._run_git(["branch", "-D", branch_name])
+ 
+         # Create worktree with new branch from base
+-        result = self._run_git(
+-            ["worktree", "add", "-b", branch_name, str(worktree_path), self.base_branch]
+-        )
++        # On Windows, git worktree add can fail with "Could not reset index file"
++        # if another process has the git index open. Use --no-checkout to avoid this,
++        # then checkout in the worktree's own directory.
++        if sys.platform == "win32":
++            # Windows: Create worktree without checkout first, then populate separately
++            # This avoids the index lock issue caused by other processes reading git status
++            # The --no-checkout flag creates the worktree structure but skips populating files
++            result = self._run_git(
++                ["worktree", "add", "--no-checkout", "-b", branch_name, str(worktree_path), self.base_branch]
++            )
+ 
+-        if result.returncode != 0:
+-            raise WorktreeError(
+-                f"Failed to create worktree for {spec_name}: {result.stderr}"
++            if result.returncode != 0:
++                raise WorktreeError(
++                    f"Failed to create worktree for {spec_name}: {result.stderr}"
++                )
++
++            # Now populate the worktree using read-tree + checkout-index
++            # These low-level commands avoid the index lock issues that affect reset/checkout
++            # Step 1: Read the tree into the worktree's index
++            read_result = self._run_git(["read-tree", "HEAD"], cwd=worktree_path)
++            if read_result.returncode != 0:
++                self._run_git(["worktree", "remove", "--force", str(worktree_path)])
++                self._run_git(["branch", "-D", branch_name])
++                raise WorktreeError(
++                    f"Failed to read tree for {spec_name}: {read_result.stderr}"
++                )
++
++            # Step 2: Checkout files from index to working directory
++            checkout_result = self._run_git(["checkout-index", "-a", "-f"], cwd=worktree_path)
++            if checkout_result.returncode != 0:
++                self._run_git(["worktree", "remove", "--force", str(worktree_path)])
++                self._run_git(["branch", "-D", branch_name])
++                raise WorktreeError(
++                    f"Failed to checkout files for {spec_name}: {checkout_result.stderr}"
++                )
++        else:
++            # Non-Windows: Use standard worktree add
++            result = self._run_git(
++                ["worktree", "add", "-b", branch_name, str(worktree_path), self.base_branch]
+             )
+ 
++            if result.returncode != 0:
++                raise WorktreeError(
++                    f"Failed to create worktree for {spec_name}: {result.stderr}"
++                )
++
+         print(f"Created worktree: {worktree_path.name} on branch {branch_name}")
+ 
+         return WorktreeInfo(
+diff --git a/apps/backend/runners/spec_runner.py b/apps/backend/runners/spec_runner.py
+index 0bda6db115..cce959c7bf 100644
+--- a/apps/backend/runners/spec_runner.py
++++ b/apps/backend/runners/spec_runner.py
+@@ -47,6 +47,7 @@
+ import asyncio
+ import io
+ import os
++import subprocess
+ from pathlib import Path
+ 
+ # Configure safe encoding on Windows BEFORE any imports that might print
+@@ -340,8 +341,12 @@ def main():
+             print(f"  {muted('Running:')} {' '.join(run_cmd)}")
+             print()
+ 
+-            # Execute run.py - replace current process
+-            os.execv(sys.executable, run_cmd)
++            # Execute run.py - use subprocess on Windows (os.execv doesn't work properly)
++            if sys.platform == "win32":
++                result = subprocess.run(run_cmd)
++                sys.exit(result.returncode)
++            else:
++                os.execv(sys.executable, run_cmd)
+ 
+         sys.exit(0)
+ 
+diff --git a/docs/RESUME_RESTART_GUIDE.md b/docs/RESUME_RESTART_GUIDE.md
+new file mode 100644
+index 0000000000..adc43721e8
+--- /dev/null
++++ b/docs/RESUME_RESTART_GUIDE.md
+@@ -0,0 +1,285 @@
++# Auto-Claude: Resume & Restart Guide
++
++How to handle interrupted builds and resume work in Auto-Claude.
++
++---
++
++## Quick Reference
++
++| Scenario | Action |
++|----------|--------|
++| Paused mid-task, want to continue | Just run the same command again |
++| Want to pause gracefully | Press `Ctrl+C` once |
++| Want to exit immediately | Press `Ctrl+C` twice |
++| Build seems stuck | Create `PAUSE` file, review, delete to resume |
++| Need to add instructions | Create `HUMAN_INPUT.md` in spec directory |
++
++---
++
++## How Resumption Works
++
++### State That Is Preserved (Survives Interruption)
++
++| State | Location | Description |
++|-------|----------|-------------|
++| Subtask status | `implementation_plan.json` | pending/in_progress/completed/failed |
++| Git commits | `.git/` in worktree | All committed work is saved |
++| Attempt history | `memory/attempt_history.json` | What approaches were tried |
++| Session insights | `memory/session_insights/` | Learnings from past sessions |
++| Build commits | `memory/build_commits.json` | Good commits for rollback |
++| Codebase map | `memory/codebase_map.json` | File structure and patterns |
++| Patterns | `memory/patterns.md` | Code patterns discovered |
++| Gotchas | `memory/gotchas.md` | Pitfalls to avoid |
++| Graphiti memory | Project's graphiti DB | Cross-session context |
++
++### State That Is Lost
++
++| State | Reason |
++|-------|--------|
++| Agent's internal context | Fresh context window each session |
++| Uncommitted file changes | Not saved to git |
++| In-memory variables | Process terminated |
++
++**Key Point:** Completed subtasks are never re-attempted. The agent picks up at the next pending subtask.
++
++---
++
++## Resuming an Interrupted Build
++
++### Method 1: Command Line
++
++Simply run the same command again:
++
++```bash
++cd <project-directory>
++python <auto-claude-path>/apps/backend/run.py --spec <spec-number>
++```
++
++Example:
++```bash
++python I:/AI_Projects/Auto-Claude/apps/backend/run.py --spec 001
++```
++
++### Method 2: Auto-Claude UI
++
++1. Open Auto-Claude UI
++2. Navigate to the spec that was interrupted
++3. Click "Resume" or "Continue Build"
++
++The agent will:
++1. Read `implementation_plan.json` to find current progress
++2. Identify the next pending subtask
++3. Load recovery context (if previous attempts failed)
++4. Continue from where it left off
++
++---
++
++## Graceful Pause Options
++
++### Option 1: Ctrl+C (Keyboard Interrupt)
++
++- **Press once:** Pauses the build, prompts for optional instructions
++- **Press twice:** Exits immediately
++
++After single Ctrl+C:
++```
++Build paused. Options:
++1. Add instructions for next session (will be saved)
++2. Press Ctrl+C again to exit
++3. Wait to continue...
++```
++
++### Option 2: PAUSE File
++
++Create a file named `PAUSE` in the spec directory:
++
++```bash
++touch .auto-claude/specs/<spec-name>/PAUSE
++```
++
++The build will pause at the next checkpoint. To resume:
++
++```bash
++rm .auto-claude/specs/<spec-name>/PAUSE
++python run.py --spec <spec-number>
++```
++
++### Option 3: Add Human Instructions
++
++Create `HUMAN_INPUT.md` in the spec directory with guidance:
++
++```markdown
++# Human Instructions
++
++Please focus on the authentication module first.
++The API endpoint should use JWT tokens, not session cookies.
++```
++
++This will be automatically injected into the next session's prompt.
++
++---
++
++## Checking Build Status
++
++### View Progress Summary
++
++```bash
++python run.py --spec <spec-number> --status
++```
++
++Or check `implementation_plan.json` directly:
++
++```json
++{
++  "phases": [
++    {
++      "subtasks": [
++        {"id": "subtask-1-1", "status": "completed"},
++        {"id": "subtask-1-2", "status": "completed"},
++        {"id": "subtask-2-1", "status": "in_progress"},  // <-- Current
++        {"id": "subtask-2-2", "status": "pending"},
++        {"id": "subtask-2-3", "status": "pending"}
++      ]
++    }
++  ]
++}
++```
++
++### Subtask Status Values
++
++| Status | Meaning |
++|--------|---------|
++| `pending` | Not started yet |
++| `in_progress` | Currently being worked on |
++| `completed` | Finished successfully |
++| `blocked` | Waiting on dependency |
++| `failed` | Attempted but failed |
++
++---
++
++## Recovery from Failed Subtasks
++
++### Automatic Recovery
++
++When a subtask fails multiple times, Auto-Claude:
++1. Records the attempt in `attempt_history.json`
++2. Marks the subtask as "stuck" after 3+ failures
++3. Tries different approaches on retry
++4. Loads Graphiti memory for context
++
++### Manual Recovery
++
++If a subtask is stuck:
++
++1. **Review attempt history:**
++   ```bash
++   cat .auto-claude/specs/<spec>/memory/attempt_history.json
++   ```
++
++2. **Add human guidance:**
++   ```bash
++   echo "Try using library X instead of Y" > .auto-claude/specs/<spec>/HUMAN_INPUT.md
++   ```
++
++3. **Reset subtask status (if needed):**
++   Edit `implementation_plan.json` and change status from `failed` to `pending`
++
++4. **Resume:**
++   ```bash
++   python run.py --spec <spec-number>
++   ```
++
++---
++
++## Starting Fresh (Full Reset)
++
++If you want to completely restart a spec:
++
++### Option 1: Delete and Recreate
++
++```bash
++# Delete the spec directory
++rm -rf .auto-claude/specs/<spec-name>
++
++# Delete the worktree
++git worktree remove .worktrees/<spec-name> --force
++
++# Recreate the spec
++python spec_runner.py --task "Your task description"
++```
++
++### Option 2: Reset Status Only
++
++Edit `implementation_plan.json` and set all subtasks to `pending`:
++
++```json
++{"id": "subtask-1-1", "status": "pending", "started_at": null, "completed_at": null}
++```
++
++Then run again:
++```bash
++python run.py --spec <spec-number>
++```
++
++---
++
++## Windows-Specific Notes
++
++### Kill Stale Processes Before Resume
++
++Windows doesn't properly clean up processes. Before resuming:
++
++```powershell
++taskkill /F /IM python.exe /IM node.exe /IM electron.exe 2>$null
++```
++
++### Verify No Lock Files
++
++Check for stale lock files:
++
++```powershell
++dir .auto-claude\specs\<spec>\*.lock
++dir .worktrees\<spec>\.git\index.lock
++```
++
++Delete any found lock files before resuming.
++
++---
++
++## Troubleshooting
++
++### Build Won't Resume
++
++1. **Check for PAUSE file:** `ls .auto-claude/specs/<spec>/PAUSE`
++2. **Check for lock files:** `ls .auto-claude/specs/<spec>/*.lock`
++3. **Kill stale processes:** `taskkill /F /IM python.exe`
++4. **Verify plan exists:** `cat .auto-claude/specs/<spec>/implementation_plan.json`
++
++### Wrong Subtask Running
++
++The agent always picks the first `pending` subtask respecting phase dependencies. If wrong:
++1. Check `implementation_plan.json` for status values
++2. Manually set completed tasks to `completed`
++3. Manually set the target task to `pending`
++
++### Lost Work
++
++Check git history in the worktree:
++```bash
++cd .worktrees/<spec-name>
++git log --oneline -20
++git diff HEAD~1
++```
++
++Committed work is always preserved.
++
++---
++
++## Best Practices
++
++1. **Let subtasks complete** - Interrupting mid-subtask loses that subtask's uncommitted work
++2. **Use PAUSE file for planned breaks** - Cleaner than Ctrl+C
++3. **Check status before resuming** - Understand where you left off
++4. **Add HUMAN_INPUT.md for guidance** - Help the agent if it's struggling
++5. **Kill stale processes on Windows** - Prevents conflicts
++6. **Review attempt history** - Understand what's been tried before

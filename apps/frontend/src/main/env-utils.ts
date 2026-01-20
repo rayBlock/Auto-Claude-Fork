@@ -53,7 +53,7 @@ export async function existsAsync(filePath: string): Promise<boolean> {
 }
 
 // Cache for npm global prefix to avoid repeated async calls
-let npmGlobalPrefixCache: string | null | undefined ;
+let npmGlobalPrefixCache: string | null | undefined;
 let npmGlobalPrefixCachePromise: Promise<string | null> | null = null;
 
 /**
@@ -597,4 +597,63 @@ export function getSpawnCommand(command: string): string {
     return trimmed.slice(1, -1);
   }
   return trimmed;
+}
+
+/**
+ * Derives the path to Git Bash (sh.exe) on Windows.
+ *
+ * This is used to ensure the Claude Code CLI has access to a proper sh environment
+ * when running commands, especially important for repository insights.
+ *
+ * @returns The full path to sh.exe on Windows, or null if not found
+ */
+export function deriveGitBashPath(): string | null {
+  if (!isWindows()) {
+    return null;
+  }
+
+  // Common installation locations for Git on Windows
+  const homeDir = os.homedir();
+  const candidates = [
+    'C:\\Program Files\\Git\\bin\\sh.exe',
+    'C:\\Program Files (x86)\\Git\\bin\\sh.exe',
+    path.join(homeDir, 'AppData', 'Local', 'Programs', 'Git', 'bin', 'sh.exe'),
+  ];
+
+  // Also check if bash is in PATH and resolve it to sh.exe
+  const gitPath = findExecutable('git');
+  if (gitPath) {
+    // If git is in C:\Program Files\Git\cmd\git.exe, then sh is usually in C:\Program Files\Git\bin\sh.exe
+    const gitBin = path.join(path.dirname(path.dirname(gitPath)), 'bin', 'sh.exe');
+    candidates.push(gitBin);
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Gets environment variables required for Git Bash on Windows.
+ *
+ * Specifically adds CLAUDE_CODE_GIT_BASH_PATH which is recognized by
+ * the Claude Code CLI to find its required shell environment.
+ *
+ * @returns Environment record with Git Bash path if found
+ */
+export function getGitBashEnv(): Record<string, string> {
+  if (!isWindows()) {
+    return {};
+  }
+
+  const gitBashPath = deriveGitBashPath();
+  if (gitBashPath) {
+    return { CLAUDE_CODE_GIT_BASH_PATH: gitBashPath };
+  }
+
+  return {};
 }

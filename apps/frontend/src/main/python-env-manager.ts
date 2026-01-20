@@ -701,9 +701,17 @@ if sys.version_info >= (3, 12):
       // Use case-insensitive check for Windows compatibility (env vars are case-insensitive on Windows)
       // Skip undefined values (TypeScript type guard)
       const upperKey = key.toUpperCase();
-      if (upperKey !== 'PYTHONHOME' && value !== undefined) {
-        baseEnv[key] = value;
+      if (upperKey === 'PYTHONHOME' || value === undefined) {
+        continue;
       }
+
+      // ACS-1229: Remove PowerShell-specific environment variables that cause issues
+      // in Python subprocesses launched from PowerShell (especially when using pywin32)
+      if (upperKey === 'PSMODULEPATH' || upperKey === 'POWERSHELL_DISTRIBUTION_CHANNEL') {
+        continue;
+      }
+
+      baseEnv[key] = value;
     }
 
     // Build PYTHONPATH - for Windows with pywin32, we need to include win32 and win32/lib

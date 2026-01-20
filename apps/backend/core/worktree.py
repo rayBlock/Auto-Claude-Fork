@@ -466,6 +466,60 @@ class WorktreeManager:
 
         return stats
 
+    def _create_worktree_windows_fallback(
+        self, branch_name: str, worktree_path: Path, start_point: str
+    ) -> subprocess.CompletedProcess:
+        """
+        Create a worktree using Windows-compatible fallback method.
+
+        On Windows, git worktree add can fail with "Could not reset index file" error.
+        This fallback uses --no-checkout followed by read-tree and checkout-index
+        to populate the worktree.
+
+        Args:
+            branch_name: Name of the branch to create
+            worktree_path: Path where worktree should be created
+            start_point: Git ref to base the worktree on
+
+        Returns:
+            CompletedProcess from the final git operation
+        """
+        # Step 1: Create worktree without checking out files
+        result = self._run_git(
+            [
+                "worktree",
+                "add",
+                "--no-checkout",
+                "-b",
+                branch_name,
+                str(worktree_path),
+                start_point,
+            ]
+        )
+        if result.returncode != 0:
+            return result
+
+        # Step 2: Read the tree into the worktree's index
+        result = self._run_git(["read-tree", "HEAD"], cwd=worktree_path)
+
+        # Step 3: Checkout files from the index (if step 2 succeeded)
+        if result.returncode == 0:
+            result = self._run_git(["checkout-index", "-a", "-f"], cwd=worktree_path)
+            if result.returncode != 0:
+                # Try alternative: git reset followed by checkout-index
+                reset_result = self._run_git(["reset", "HEAD"], cwd=worktree_path)
+                if reset_result.returncode == 0:
+                    result = self._run_git(
+                        ["checkout-index", "-a", "-f"], cwd=worktree_path
+                    )
+
+        # Single cleanup point for any failure after worktree creation
+        if result.returncode != 0:
+            shutil.rmtree(worktree_path, ignore_errors=True)
+            self._run_git(["worktree", "prune"])
+
+        return result
+
     def create_worktree(self, spec_name: str) -> WorktreeInfo:
         """
         Create a worktree for a spec.
@@ -525,32 +579,30 @@ class WorktreeManager:
             print(
                 f"Remote ref {remote_ref} not found, using local branch: {self.base_branch}"
             )
-
         # Create worktree with new branch from the start point (remote preferred)
-        # On Windows, standard 'worktree add' often fails with index errors
-        # if the worktree path is on a different drive or due to path length issues.
-        # Using --no-checkout + read-tree/checkout-index is more robust.
-        if sys.platform == "win32":
-            result = self._run_git(
-                ["worktree", "add", "--no-checkout", "-b", branch_name, str(worktree_path), start_point]
-            )
-            if result.returncode == 0:
-                # Step 1: Read tree into worktree's index
-                read_result = self._run_git(["read-tree", "HEAD"], cwd=worktree_path)
-                # Step 2: Checkout files from index
-                checkout_result = self._run_git(["checkout-index", "-a", "-f"], cwd=worktree_path)
-
-                if read_result.returncode != 0 or checkout_result.returncode != 0:
-                    result = read_result if read_result.returncode != 0 else checkout_result
-        else:
-            result = self._run_git(
-                ["worktree", "add", "-b", branch_name, str(worktree_path), start_point]
-            )
+        result = self._run_git(
+            ["worktree", "add", "-b", branch_name, str(worktree_path), start_point]
+        )
 
         if result.returncode != 0:
-            raise WorktreeError(
-                f"Failed to create worktree for {spec_name}: {result.stderr}"
-            )
+            # On Windows, git worktree add can fail with "Could not reset index file" error.
+            # Use fallback approach: create worktree without checkout, then populate it.
+            if (
+                sys.platform == "win32"
+                and "could not reset index" in result.stderr.lower()
+            ):
+                print("Standard worktree creation failed, trying Windows fallback...")
+                result = self._create_worktree_windows_fallback(
+                    branch_name, worktree_path, start_point
+                )
+                if result.returncode != 0:
+                    raise WorktreeError(
+                        f"Failed to create worktree for {spec_name} (Windows fallback): {result.stderr}"
+                    )
+            else:
+                raise WorktreeError(
+                    f"Failed to create worktree for {spec_name}: {result.stderr}"
+                )
 
         print(f"Created worktree: {worktree_path.name} on branch {branch_name}")
 

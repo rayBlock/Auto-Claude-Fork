@@ -289,10 +289,13 @@ const ALLOWED_PATH_PATTERNS: RegExp[] = [
   /^[A-Za-z]:\\Program Files \(x86\)\\Python\d+\\python\.exe$/i,
   /^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\Programs\\Python\\Python\d+\\python\.exe$/i,
   // Conda environments
-  /^.*\/anaconda\d*\/bin\/python\d*(\.\d+)?$/,
-  /^.*\/miniconda\d*\/bin\/python\d*(\.\d+)?$/,
-  /^.*\/anaconda\d*\/envs\/[^/]+\/bin\/python\d*(\.\d+)?$/,
   /^.*\/miniconda\d*\/envs\/[^/]+\/bin\/python\d*(\.\d+)?$/,
+  // Windows Microsoft Store Python
+  /^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\Microsoft\\WindowsApps\\python\d*\.exe$/i,
+  // Windows WinGet Python
+  /^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\Programs\\Python\\Python\d+\\python\.exe$/i,
+  // Windows global Python (alternate)
+  /^[A-Za-z]:\\Python\d+\\python\.exe$/i,
 ];
 
 /**

@@ -5,7 +5,7 @@ import { getAPIProfileEnv } from '../services/profile';
 import { getOAuthModeClearVars } from '../agent/env-utils';
 import { pythonEnvManager, getConfiguredPythonPath } from '../python-env-manager';
 import { getValidatedPythonPath } from '../python-detector';
-import { getAugmentedEnv } from '../env-utils';
+import { getAugmentedEnv, getGitBashEnv } from '../env-utils';
 import { getEffectiveSourcePath } from '../updater/path-resolver';
 
 /**
@@ -88,7 +88,7 @@ export class InsightsConfig {
           let value = trimmed.substring(eqIndex + 1).trim();
 
           if ((value.startsWith('"') && value.endsWith('"')) ||
-              (value.startsWith("'") && value.endsWith("'"))) {
+            (value.startsWith("'") && value.endsWith("'"))) {
             value = value.slice(1, -1);
           }
 
@@ -139,9 +139,11 @@ export class InsightsConfig {
     // Use getAugmentedEnv() to ensure common tool paths (claude, dotnet, etc.)
     // are available even when app is launched from Finder/Dock.
     const augmentedEnv = getAugmentedEnv();
+    const gitBashEnv = getGitBashEnv();
 
     return {
       ...augmentedEnv,
+      ...gitBashEnv,
       ...pythonEnv, // Include PYTHONPATH for bundled site-packages
       ...autoBuildEnv,
       ...oauthModeClearVars,
