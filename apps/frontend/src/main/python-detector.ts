@@ -115,10 +115,12 @@ export function findPythonCommand(): string | null {
  */
 function getPythonVersion(pythonCmd: string): string | null {
   try {
-    const version = execSync(`${pythonCmd} --version`, {
+    const [cmd, args] = parsePythonCommand(pythonCmd);
+    const version = execFileSync(cmd, [...args, '--version'], {
       stdio: 'pipe',
       timeout: 5000,
-      windowsHide: true
+      windowsHide: true,
+      shell: false
     }).toString().trim();
 
     // Extract version number from "Python 3.10.5" format
@@ -210,7 +212,7 @@ export function parsePythonCommand(pythonPath: string): [string, string[]] {
   }
 
   if ((cleanPath.startsWith('"') && cleanPath.endsWith('"')) ||
-      (cleanPath.startsWith("'") && cleanPath.endsWith("'"))) {
+    (cleanPath.startsWith("'") && cleanPath.endsWith("'"))) {
     cleanPath = cleanPath.slice(1, -1);
     // Validate again after quote removal
     if (cleanPath === '') {
@@ -287,16 +289,13 @@ const ALLOWED_PATH_PATTERNS: RegExp[] = [
   /^[A-Za-z]:\\Program Files \(x86\)\\Python\d+\\python\.exe$/i,
   /^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\Programs\\Python\\Python\d+\\python\.exe$/i,
   // Conda environments
-  /^.*\/anaconda\d*\/bin\/python\d*(\.\d+)?$/,
-  /^.*\/miniconda\d*\/bin\/python\d*(\.\d+)?$/,
-  /^.*\/anaconda\d*\/envs\/[^/]+\/bin\/python\d*(\.\d+)?$/,
   /^.*\/miniconda\d*\/envs\/[^/]+\/bin\/python\d*(\.\d+)?$/,
-  // Bundled Python in packaged Electron apps (macOS/Linux)
-  // Matches paths like: /path/to/app/resources/python/bin/python3
-  /^.*\/resources\/python\/bin\/python\d*(\.\d+)?$/,
-  // Bundled Python in packaged Electron apps (Windows)
-  // Matches paths like: C:\path\to\app\resources\python\python.exe
-  /^.*\\resources\\python\\python\.exe$/i,
+  // Windows Microsoft Store Python
+  /^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\Microsoft\\WindowsApps\\python\d*\.exe$/i,
+  // Windows WinGet Python
+  /^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\Programs\\Python\\Python\d+\\python\.exe$/i,
+  // Windows global Python (alternate)
+  /^[A-Za-z]:\\Python\d+\\python\.exe$/i,
 ];
 
 /**
@@ -385,7 +384,7 @@ export function validatePythonPath(pythonPath: string): PythonPathValidation {
   // Strip surrounding quotes for validation
   let cleanPath = trimmedPath;
   if ((cleanPath.startsWith('"') && cleanPath.endsWith('"')) ||
-      (cleanPath.startsWith("'") && cleanPath.endsWith("'"))) {
+    (cleanPath.startsWith("'") && cleanPath.endsWith("'"))) {
     cleanPath = cleanPath.slice(1, -1);
   }
 
