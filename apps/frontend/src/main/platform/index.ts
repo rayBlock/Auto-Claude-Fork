@@ -322,6 +322,46 @@ export function normalizePath(inputPath: string): string {
 }
 
 /**
+ * Normalize an executable path by adding platform-specific extensions if missing.
+ * Only attempts normalization if the path doesn't exist as-is.
+ *
+ * @param candidatePath - The user-provided path to normalize
+ * @returns The normalized path (with extension if found), or original if not found
+ */
+export function normalizeExecutablePath(candidatePath: string): string {
+  // On Unix, no extension normalization needed
+  if (!isWindows()) {
+    return candidatePath;
+  }
+
+  // If path exists as-is, return it
+  if (existsSync(candidatePath)) {
+    return candidatePath;
+  }
+
+  // Check if path already has an extension
+  const ext = path.extname(candidatePath);
+  if (ext) {
+    // Has extension but doesn't exist - return as-is (will fail validation)
+    return candidatePath;
+  }
+
+  // No extension - try common Windows executable extensions
+  // Use the canonical list from getPathConfig for consistency
+  const config = getPathConfig();
+  const extensions = [...config.executableExtensions].filter((ext) => ext !== '');
+  for (const testExt of extensions) {
+    const testPath = candidatePath + testExt;
+    if (existsSync(testPath)) {
+      return testPath;
+    }
+  }
+
+  // No match found - return original path (will fail validation with better error)
+  return candidatePath;
+}
+
+/**
  * Join path parts using the platform separator
  */
 export function joinPaths(...parts: string[]): string {
@@ -501,4 +541,62 @@ export function killProcessGracefully(
     // Unref timer so it doesn't prevent Node.js from exiting
     forceKillTimer.unref();
   }
+}
+
+/**
+ * Compare two paths for equality, accounting for case-insensitive filesystems on Windows.
+ *
+ * @param path1 - First path to compare
+ * @param path2 - Second path to compare
+ * @returns true if paths are equivalent on the current platform
+ */
+export function pathsAreEqual(path1: string, path2: string): boolean {
+  const normalized1 = path.normalize(path1);
+  const normalized2 = path.normalize(path2);
+
+  if (isWindows()) {
+    return normalized1.toLowerCase() === normalized2.toLowerCase();
+  }
+  return normalized1 === normalized2;
+}
+
+/**
+ * Get a "which" command appropriate for the current platform.
+ * Returns 'where' for Windows, 'which' for Unix-like systems.
+ *
+ * @returns The which/where command name
+ */
+export function getWhichCommand(): string {
+  return isWindows() ? 'where' : 'which';
+}
+
+/**
+ * Get the path to the Python executable in a virtual environment.
+ * Cross-platform: uses Scripts/python.exe on Windows, bin/python on Unix.
+ *
+ * @param venvRoot - Root directory of the virtual environment
+ * @returns Path to the Python executable
+ */
+export function getVenvPythonPath(venvRoot: string): string {
+  const binDir = isWindows() ? 'Scripts' : 'bin';
+  const pythonExe = `python${getExecutableExtension()}`;
+  return joinPaths(venvRoot, binDir, pythonExe);
+}
+
+/**
+ * Get the PTY (pseudo-terminal) socket path for the current platform.
+ * Uses named pipes on Windows, Unix domain sockets on macOS/Linux.
+ *
+ * @returns The socket path for PTY communication
+ */
+export function getPtySocketPath(): string {
+  // On Unix-like systems, use the real user ID from process.getuid()
+  // On Windows, process.getuid() is undefined, so use USERNAME or USER environment variables
+  const uid =
+    process.getuid?.() ??
+    (isWindows() ? process.env.USERNAME || process.env.USER || 'default' : 'default');
+  if (isWindows()) {
+    return `\\\\.\\pipe\\auto-claude-pty-${uid}`;
+  }
+  return `/tmp/auto-claude-pty-${uid}.sock`;
 }
